@@ -128,24 +128,18 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
 
       const map = L.map(mapContainerRef.current, { zoomControl: true, attributionControl: true })
         .setView(DEFAULT_CENTER, 6);
-      // Dark Google-Maps-style base tiles (no labels) via CartoDB Dark Matter
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20,
+      // Standard OSM tiles — they render building numbers at z18+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
       }).addTo(map);
 
-      // Labels overlay in its own pane so we can brighten ONLY the text
-      const labelsPane = map.createPane('labels');
-      labelsPane.style.zIndex = '450';
-      labelsPane.style.pointerEvents = 'none';
-      labelsPane.style.filter = 'brightness(3) contrast(1.1)';
-
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png', {
-        pane: 'labels',
-        subdomains: 'abcd',
-        maxZoom: 20,
-      }).addTo(map);
+      // Dark-mode the tiles via CSS filter on the tile pane only.
+      // Markers/controls live in other panes, so they stay normal-coloured.
+      const tilePane = map.getPane('tilePane');
+      if (tilePane) {
+        tilePane.style.filter = 'invert(0.92) hue-rotate(180deg) brightness(0.95) contrast(1.05) saturate(0.7)';
+      }
 
       map.on('click', (e: LeafletMouseEvent) => {
         placeMarker(e.latlng.lat, e.latlng.lng, false);
