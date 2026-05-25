@@ -128,9 +128,11 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
 
       const map = L.map(mapContainerRef.current, { zoomControl: true, attributionControl: true })
         .setView(DEFAULT_CENTER, 6);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19,
+      // Google-Maps-style tiles via CartoDB Voyager (free, no API key)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20,
       }).addTo(map);
 
       map.on('click', (e: LeafletMouseEvent) => {
