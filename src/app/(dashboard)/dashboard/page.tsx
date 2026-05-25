@@ -127,7 +127,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative rounded-2xl overflow-hidden p-6"
+          className="relative rounded-2xl overflow-hidden p-4 sm:p-6"
           style={{
             background: `linear-gradient(135deg, ${theme.accentColor}20 0%, ${theme.secondaryColor}15 100%)`,
             border: `1px solid ${theme.accentColor}30`,
@@ -139,15 +139,15 @@ export default function DashboardPage() {
               background: `radial-gradient(ellipse at top right, ${theme.accentColor}15 0%, transparent 60%)`,
             }}
           />
-          <div className="relative z-10 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-white">{greeting} 👋</h2>
-              <p className="text-white/50 text-sm mt-1">
-                You have <span className="text-white font-medium">{stats.inProgress}</span> tasks in progress
-                and <span className="text-white font-medium">{upcomingEvents.length}</span> upcoming events.
+          <div className="relative z-10 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-xl font-semibold text-white truncate">{greeting} 👋</h2>
+              <p className="text-white/50 text-xs sm:text-sm mt-1">
+                <span className="text-white font-medium">{stats.inProgress}</span> tasks in progress
+                {' · '}<span className="text-white font-medium">{upcomingEvents.length}</span> upcoming events
               </p>
             </div>
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2 flex-shrink-0">
               <div
                 className="px-3 py-1.5 rounded-xl text-sm font-medium"
                 style={{

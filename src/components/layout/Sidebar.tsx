@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -39,6 +39,40 @@ export const Sidebar: React.FC = () => {
   const { theme, updateTheme } = useTheme();
   const { unreadCount } = useNotifications();
   const [collapsed, setCollapsed] = useState(isCapacitor ? true : theme.sidebarCollapsed);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Track mobile viewport (Tailwind md breakpoint = 768px)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  // Listen for hamburger toggle from Header
+  useEffect(() => {
+    const handler = () => setMobileOpen((v) => !v);
+    window.addEventListener('toggle-sidebar', handler);
+    return () => window.removeEventListener('toggle-sidebar', handler);
+  }, []);
+
+  // Close mobile drawer on route change
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  // Body scroll lock + ESC to close while drawer is open
+  useEffect(() => {
+    if (!isMobile || !mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isMobile, mobileOpen]);
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -51,17 +85,34 @@ export const Sidebar: React.FC = () => {
     catch { toast.error('Sign out failed'); }
   };
 
+  // On mobile, sidebar is full-width drawer with labels always visible
+  const effCollapsed = isMobile ? false : collapsed;
+  const sidebarWidth = isMobile ? 280 : (collapsed ? 56 : 220);
+  const sidebarTranslate = isMobile && !mobileOpen ? '-100%' : '0%';
+
   return (
+    <>
+      {/* Mobile backdrop */}
+      <AnimatePresence>
+        {isMobile && mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setMobileOpen(false)}
+            className="fixed inset-0 z-40 bg-black/85 backdrop-blur-md md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
     <motion.aside
-      className="fixed left-0 top-0 h-full z-30 flex flex-col"
-      animate={{ width: collapsed ? 56 : 220 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      style={{ background: '#000000', borderRight: '1px solid #333333' }}
+      className="fixed left-0 top-0 h-full z-50 flex flex-col"
+      animate={{ width: sidebarWidth, x: sidebarTranslate }}
+      transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+      style={{ background: '#000000', borderRight: '1px solid #333333', paddingTop: 'env(safe-area-inset-top, 0)', paddingBottom: 'env(safe-area-inset-bottom, 0)' }}
     >
       {/* Logo */}
       <div className="flex items-center h-14 px-3 border-b border-[#333333] flex-shrink-0">
         <AnimatePresence mode="wait">
-          {!collapsed ? (
+          {!effCollapsed ? (
             <motion.div key="full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="flex items-center gap-2.5 mr-auto min-w-0">
               <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 bg-white">
@@ -77,14 +128,14 @@ export const Sidebar: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-        {!collapsed && (
+        {!effCollapsed && (
           <button onClick={toggleCollapse} className="text-[#555555] hover:text-white transition-colors p-1 rounded hover:bg-[#1a1a1a] flex-shrink-0">
             <ChevronLeft className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {collapsed && (
+      {effCollapsed && !isMobile && (
         <button onClick={toggleCollapse} className="mx-auto mt-2 text-[#555555] hover:text-white transition-colors p-1.5 rounded hover:bg-[#1a1a1a]">
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -101,7 +152,7 @@ export const Sidebar: React.FC = () => {
               onClick={() => router.push(href)}
               className={cn(
                 'relative w-full flex items-center rounded transition-colors duration-100 group',
-                collapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2',
+                effCollapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2',
                 active ? 'bg-white text-black' : 'text-[#888888] hover:bg-[#1a1a1a] hover:text-white'
               )}
               whileTap={{ scale: 0.97 }}
@@ -115,7 +166,7 @@ export const Sidebar: React.FC = () => {
                 )}
               </div>
               <AnimatePresence>
-                {!collapsed && (
+                {!effCollapsed && (
                   <motion.span
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: 'auto' }}
@@ -126,7 +177,7 @@ export const Sidebar: React.FC = () => {
                   </motion.span>
                 )}
               </AnimatePresence>
-              {collapsed && (
+              {effCollapsed && (
                 <span className="absolute left-full ml-2 px-2 py-1 rounded text-xs font-medium text-white bg-[#111111] border border-[#444444] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                   {label}
                 </span>
@@ -141,12 +192,12 @@ export const Sidebar: React.FC = () => {
         <a href="/nexus-app.bin" download="NEXUS.apk"
           className={cn(
             'flex items-center rounded transition-colors border border-[#333333] text-[#888888] hover:text-white hover:border-white',
-            collapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
+            effCollapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'
           )}
           title="Download Android App">
           <Smartphone className="w-4 h-4 flex-shrink-0" />
           <AnimatePresence>
-            {!collapsed && (
+            {!effCollapsed && (
               <motion.span
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
@@ -164,7 +215,7 @@ export const Sidebar: React.FC = () => {
         <motion.button
           onClick={() => router.push('/settings/profile')}
           className={cn('w-full flex items-center rounded transition-colors hover:bg-[#1a1a1a]',
-            collapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-1.5')}
+            effCollapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-1.5')}
           whileTap={{ scale: 0.98 }}>
           <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden border border-[#444444]" style={{ background: '#1a1a1a' }}>
             {user?.photoURL
@@ -172,7 +223,7 @@ export const Sidebar: React.FC = () => {
               : <div className="w-full h-full flex items-center justify-center"><User className="w-3.5 h-3.5 text-[#888888]" /></div>}
           </div>
           <AnimatePresence>
-            {!collapsed && (
+            {!effCollapsed && (
               <motion.div
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: 'auto' }}
@@ -188,10 +239,10 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={handleLogout}
           className={cn('w-full flex items-center text-[#666666] hover:text-white hover:bg-[#1a1a1a] rounded transition-colors',
-            collapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-1.5')}>
+            effCollapsed ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-1.5')}>
           <LogOut className="w-4 h-4 flex-shrink-0" />
           <AnimatePresence>
-            {!collapsed && (
+            {!effCollapsed && (
               <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-sm">
                 Sign out
               </motion.span>
@@ -200,5 +251,6 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
     </motion.aside>
+    </>
   );
 };

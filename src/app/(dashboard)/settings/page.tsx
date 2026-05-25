@@ -79,7 +79,7 @@ const AppearanceTab = () => {
       <div>
         <h3 className="text-sm font-semibold text-white mb-1">Theme Presets</h3>
         <p className="text-xs text-white/40 mb-3">Quick color themes</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {PRESETS.map((p) => (
             <motion.button
               key={p.id}

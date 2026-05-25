@@ -19,12 +19,12 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle }) => {
 
   return (
     <header
-      className="sticky top-0 z-20 flex items-center justify-between h-14 px-5 flex-shrink-0"
-      style={{ background: '#000000', borderBottom: '1px solid #333333' }}
+      className="sticky top-0 z-20 flex items-center justify-between h-14 px-3 md:px-5 flex-shrink-0"
+      style={{ background: '#000000', borderBottom: '1px solid #333333', paddingTop: 'env(safe-area-inset-top, 0)', height: 'calc(56px + env(safe-area-inset-top, 0px))' }}
     >
-      <motion.div key={title} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}>
-        <h1 className="text-sm font-semibold text-white">{title}</h1>
-        {subtitle && <p className="text-xs text-[#666666] mt-0.5 truncate max-w-xs">{subtitle}</p>}
+      <motion.div key={title} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }} className="min-w-0 flex-1">
+        <h1 className="text-sm font-semibold text-white truncate">{title}</h1>
+        {subtitle && <p className="text-xs text-[#666666] mt-0.5 truncate max-w-[220px] md:max-w-xs">{subtitle}</p>}
       </motion.div>
 
       <div className="flex items-center gap-1">

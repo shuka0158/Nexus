@@ -669,7 +669,7 @@ const YearView: React.FC<{
   const months = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1));
 
   return (
-    <div className="grid grid-cols-3 gap-4 p-2 md:grid-cols-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 p-2">
       {months.map((monthDate) => {
         const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(monthDate)), end: endOfWeek(endOfMonth(monthDate)) });
         const isCurrentMonth = isSameMonth(monthDate, new Date());
@@ -819,7 +819,9 @@ export default function CalendarPage() {
   const { events, currentDate, view, navigate, setView, setCurrentDate, addEvent, editEvent, removeEvent } = useCalendar();
   const { theme } = useTheme();
 
-  const [sidebarOpen,    setSidebarOpen]    = useState(true);
+  const [sidebarOpen,    setSidebarOpen]    = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
+  );
   const [addModalOpen,   setAddModalOpen]   = useState(false);
   const [selectedDate,   setSelectedDate]   = useState<Date | null>(null);
   const [detailEvent,    setDetailEvent]    = useState<CalendarEvent | null>(null);
@@ -837,7 +839,15 @@ export default function CalendarPage() {
   };
 
   const filteredEvents = useMemo(() => {
-    let result = events.filter((e) => !hiddenCats.has(e.category ?? 'general'));
+    const seen = new Set<string>();
+    let result = events
+      .filter((e) => !hiddenCats.has(e.category ?? 'general'))
+      .filter((e) => {
+        const key = `${e.title}|${e.startDate.toMillis()}|${e.endDate.toMillis()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter((e) =>
@@ -870,18 +880,17 @@ export default function CalendarPage() {
 
   return (
     <DashboardLayout title="Calendar" subtitle={titleLabel}>
-      <div className="flex gap-4 max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row gap-4 max-w-7xl mx-auto">
 
-        {/* ── Sidebar ── */}
+        {/* ── Sidebar — stacks above on mobile, fixed column on desktop ── */}
         <AnimatePresence>
           {sidebarOpen && (
             <motion.div
-              initial={{ opacity: 0, x: -20, width: 0 }}
-              animate={{ opacity: 1, x: 0, width: 224 }}
-              exit={{ opacity: 0, x: -20, width: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex-shrink-0 space-y-3 overflow-hidden"
-              style={{ width: 224 }}>
+              className="flex-shrink-0 space-y-3 w-full md:w-[224px]">
 
               <NeonButton glow icon={<Plus className="w-4 h-4" />} className="w-full"
                 onClick={() => { setSelectedDate(currentDate); setAddModalOpen(true); }}>

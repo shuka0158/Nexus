@@ -10,8 +10,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
 import { processWithContext, executeAIResponse, AIResponse } from '@/lib/nexusAI';
-import { subscribeToAllEvents } from '@/lib/firestore';
-import { CalendarEvent } from '@/types';
+import { subscribeToAllEvents, subscribeToTodos } from '@/lib/firestore';
+import { CalendarEvent, Todo } from '@/types';
 import toast from 'react-hot-toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -121,12 +121,15 @@ export const NexusAIChat: React.FC = () => {
   const [input, setInput]     = useState('');
   const [sending, setSending] = useState(false);
   const [events, setEvents]   = useState<CalendarEvent[]>([]);
+  const [todos, setTodos]     = useState<Todo[]>([]);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!user) return;
-    return subscribeToAllEvents(user.uid, setEvents);
+    const unsubEvents = subscribeToAllEvents(user.uid, setEvents);
+    const unsubTodos  = subscribeToTodos(user.uid, setTodos);
+    return () => { unsubEvents(); unsubTodos(); };
   }, [user]);
 
   useEffect(() => {
@@ -158,7 +161,7 @@ export const NexusAIChat: React.FC = () => {
       // Small artificial delay so it feels "smart" rather than instant
       await new Promise((r) => setTimeout(r, 420));
 
-      const response = processWithContext(text, events, []);
+      const response = processWithContext(text, events, todos);
 
       let savedOk = false;
       const needsFirestore = response.action === 'create_event' || response.action === 'create_todo' || response.action === 'delete_event';
@@ -200,7 +203,7 @@ export const NexusAIChat: React.FC = () => {
         onClick={() => setOpen((v) => !v)}
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.92 }}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl flex items-center justify-center"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+72px)] right-4 md:bottom-6 md:right-6 z-40 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center"
         style={{
           background: `linear-gradient(135deg, ${theme.accentColor}, ${theme.secondaryColor})`,
           boxShadow: `0 8px 28px ${theme.accentColor}50, 0 0 0 1px ${theme.accentColor}20`,
@@ -227,9 +230,9 @@ export const NexusAIChat: React.FC = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-            className="fixed bottom-24 right-6 z-50 w-[370px] rounded-2xl flex flex-col overflow-hidden"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+140px)] md:bottom-24 right-3 left-3 sm:left-auto sm:right-6 z-40 sm:w-[370px] rounded-2xl flex flex-col overflow-hidden"
             style={{
-              height: 520,
+              height: 'min(520px, calc(100vh - 220px))',
               background: panelBg,
               border: `1px solid ${borderColor}`,
               backdropFilter: 'blur(24px)',

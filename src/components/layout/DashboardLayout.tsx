@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 const isCapacitor = typeof window !== 'undefined' && !!(window as { Capacitor?: unknown }).Capacitor;
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { MobileTabBar } from './MobileTabBar';
 import { CommandPalette } from './CommandPalette';
 import { ParticleBackground } from '@/components/ui/ParticleBackground';
 import { NexusAIChat } from '@/components/ai/NexusAIChat';
@@ -73,14 +74,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Main content */}
-      <motion.div
-        className="relative z-10 flex flex-col min-h-screen"
-        animate={{ paddingLeft: theme.sidebarCollapsed ? 56 : 240 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      {/* Main content — no left padding on mobile (sidebar is a drawer overlay) */}
+      <div
+        className={cn(
+          'relative z-10 flex flex-col min-h-screen transition-[padding] duration-300',
+          theme.sidebarCollapsed ? 'md:pl-[56px]' : 'md:pl-[220px]',
+        )}
       >
         <Header title={title} subtitle={subtitle} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-[calc(env(safe-area-inset-bottom,0px)+88px)] md:pb-6">
           <motion.div
             key={title}
             variants={pageVariants}
@@ -92,7 +94,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, titl
             {children}
           </motion.div>
         </main>
-      </motion.div>
+      </div>
+
+      {/* Mobile bottom tab bar */}
+      <MobileTabBar />
 
       {/* Command Palette */}
       <CommandPalette />

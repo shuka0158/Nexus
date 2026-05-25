@@ -127,7 +127,7 @@ export default function PomodoroPage() {
         </GlassCard>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {[
             { label: 'Sessions Today', value: sessionCount, color: '#00d4ff' },
             { label: 'Focus Minutes',  value: totalWorkMinutes, color: '#a855f7' },

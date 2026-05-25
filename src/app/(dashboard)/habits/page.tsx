@@ -101,7 +101,7 @@ export default function HabitsPage() {
   return (
     <DashboardLayout title="Habits" subtitle="Build streaks, build yourself">
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
         {[
           { label: 'Today', value: `${totalDoneToday}/${habits.length}`, color: theme.accentColor },
           { label: 'Longest streak', value: Math.max(0, ...habits.map(h => getStreak(h.completedDates))) + ' days', color: '#f97316' },

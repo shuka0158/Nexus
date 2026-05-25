@@ -466,7 +466,7 @@ export default function TodosPage() {
     <DashboardLayout title="Tasks" subtitle={`${stats.total} total · ${stats.completed} done`}>
       <div className="max-w-full space-y-4">
         {/* Stats bar */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {STATUS_COLUMNS.map((col) => {
             const count = todosByStatus[col.id]?.length ?? 0;
             return (

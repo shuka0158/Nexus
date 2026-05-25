@@ -107,7 +107,7 @@ export default function GoalsPage() {
   return (
     <DashboardLayout title="Goals" subtitle="Your milestones, your journey">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
         {[
           { label: 'Active', value: active.length, color: theme.accentColor },
           { label: 'Completed', value: completed.length, color: '#22c55e' },
