@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Search, X, Loader2, Crosshair } from 'lucide-react';
+import { MapPin, Search, X, Loader2, Crosshair, ChevronLeft } from 'lucide-react';
 
 interface PhotonFeature {
   properties: {
@@ -54,6 +54,19 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
     setSelected(null);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, [open, initialQuery]);
+
+  // Body scroll lock + ESC to close
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
 
   // Debounced search
   useEffect(() => {
@@ -120,33 +133,31 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
+          {/* Fullscreen panel */}
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md"
-          />
-
-          {/* Modal */}
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="fixed inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 top-[10vh] sm:top-[8vh] z-[51] w-auto sm:w-full sm:max-w-lg rounded-2xl flex flex-col overflow-hidden"
+            className="fixed inset-0 z-[51] flex flex-col overflow-hidden"
             style={{
               background: '#0d0d0d',
-              border: '1px solid #333333',
-              maxHeight: '80vh',
-              boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+              paddingTop: 'env(safe-area-inset-top, 0)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0)',
             }}
           >
             {/* Header */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-[#222222] flex-shrink-0">
-              <MapPin className="w-4 h-4 text-white/70" />
-              <p className="text-sm font-semibold text-white flex-1">Pick a location</p>
-              <button onClick={onClose} className="p-1 rounded text-white/40 hover:text-white hover:bg-white/5">
-                <X className="w-4 h-4" />
+              {selected ? (
+                <button onClick={() => setSelected(null)} className="p-1 rounded text-white/60 hover:text-white hover:bg-white/5" aria-label="Back to results">
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              ) : (
+                <MapPin className="w-4 h-4 text-white/70" />
+              )}
+              <p className="text-sm font-semibold text-white flex-1">{selected ? 'Confirm location' : 'Pick a location'}</p>
+              <button onClick={onClose} className="p-2 rounded text-white/50 hover:text-white hover:bg-white/5" aria-label="Close">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -180,11 +191,12 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
             </div>
 
             {/* Results / Preview */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3 min-h-0">
+            <div className="flex-1 flex flex-col min-h-0">
               {selected ? (
-                <div className="space-y-3">
+                <>
+                  {/* Map fills available space */}
                   {mapUrl && (
-                    <div className="rounded-lg overflow-hidden border border-[#333333]" style={{ height: 220 }}>
+                    <div className="flex-1 min-h-0 mx-3 rounded-lg overflow-hidden border border-[#333333]">
                       <iframe
                         src={mapUrl}
                         title="Map preview"
@@ -193,29 +205,33 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
                       />
                     </div>
                   )}
-                  <div className="p-3 rounded-lg bg-[#111111] border border-[#333333]">
+                  <div className="mx-3 mt-3 p-3 rounded-lg bg-[#111111] border border-[#333333] flex-shrink-0">
                     <p className="text-xs text-white/50 uppercase tracking-wider mb-1">Selected</p>
                     <p className="text-sm text-white">{formatAddress(selected)}</p>
                   </div>
-                  <p className="text-[10px] text-white/30 text-center">Map data © OpenStreetMap</p>
-                </div>
-              ) : results.length > 0 ? (
-                <div className="space-y-1">
-                  {results.map((f, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSelected(f)}
-                      className="w-full text-left px-3 py-2 rounded-lg border border-[#222222] hover:border-[#444444] hover:bg-[#111111] transition-all"
-                    >
-                      <p className="text-sm text-white truncate">{f.properties.name ?? formatAddress(f).split(',')[0]}</p>
-                      <p className="text-xs text-white/40 truncate mt-0.5">{formatAddress(f)}</p>
-                    </button>
-                  ))}
-                </div>
-              ) : query.trim().length >= 2 && !loading ? (
-                <p className="text-center text-xs text-white/30 py-6">No results found.</p>
+                  <p className="text-[10px] text-white/30 text-center mt-2 mb-1 flex-shrink-0">Map data © OpenStreetMap</p>
+                </>
               ) : (
-                <p className="text-center text-xs text-white/30 py-6">Start typing to search.</p>
+                <div className="flex-1 overflow-y-auto px-3 pb-3 min-h-0">
+                  {results.length > 0 ? (
+                    <div className="space-y-1">
+                      {results.map((f, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setSelected(f)}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-[#222222] hover:border-[#444444] hover:bg-[#111111] transition-all"
+                        >
+                          <p className="text-sm text-white truncate">{f.properties.name ?? formatAddress(f).split(',')[0]}</p>
+                          <p className="text-xs text-white/40 truncate mt-0.5">{formatAddress(f)}</p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : query.trim().length >= 2 && !loading ? (
+                    <p className="text-center text-xs text-white/30 py-12">No results found.</p>
+                  ) : (
+                    <p className="text-center text-xs text-white/30 py-12">Search an address or use your current location.</p>
+                  )}
+                </div>
               )}
             </div>
 
