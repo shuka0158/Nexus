@@ -93,7 +93,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
         reverseGeocode(pos.lat, pos.lng);
       });
     }
-    if (fly) map.flyTo([lat, lng], Math.max(map.getZoom(), 14), { duration: 0.6 });
+    if (fly) map.flyTo([lat, lng], Math.max(map.getZoom(), 18), { duration: 0.6 });
   }, [reverseGeocode]);
 
   // Initialize map when modal opens
@@ -147,7 +147,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             if (cancelled || !mapRef.current) return;
-            mapRef.current.setView([pos.coords.latitude, pos.coords.longitude], 13);
+            mapRef.current.setView([pos.coords.latitude, pos.coords.longitude], 17);
           },
           () => { /* keep default */ },
           { timeout: 4000 },
