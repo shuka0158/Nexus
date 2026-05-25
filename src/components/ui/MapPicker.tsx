@@ -128,9 +128,21 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
 
       const map = L.map(mapContainerRef.current, { zoomControl: true, attributionControl: true })
         .setView(DEFAULT_CENTER, 6);
-      // Dark Google-Maps-style tiles via CartoDB Dark Matter (free, no API key)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {
+      // Dark Google-Maps-style base tiles (no labels) via CartoDB Dark Matter
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      }).addTo(map);
+
+      // Labels overlay in its own pane so we can brighten ONLY the text
+      const labelsPane = map.createPane('labels');
+      labelsPane.style.zIndex = '450';
+      labelsPane.style.pointerEvents = 'none';
+      labelsPane.style.filter = 'brightness(3) contrast(1.1)';
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png', {
+        pane: 'labels',
         subdomains: 'abcd',
         maxZoom: 20,
       }).addTo(map);
