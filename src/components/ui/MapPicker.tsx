@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Search, X, Loader2, Crosshair, ChevronLeft } from 'lucide-react';
 
@@ -129,7 +130,9 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
       })()
     : null;
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -139,7 +142,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="fixed inset-0 z-[51] flex flex-col overflow-hidden"
+            className="fixed inset-0 z-[100] flex flex-col overflow-hidden"
             style={{
               background: '#0d0d0d',
               paddingTop: 'env(safe-area-inset-top, 0)',
@@ -254,6 +257,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 };
