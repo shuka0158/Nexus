@@ -128,8 +128,8 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
 
       const map = L.map(mapContainerRef.current, { zoomControl: true, attributionControl: true })
         .setView(DEFAULT_CENTER, 6);
-      // Google-Maps-style tiles via CartoDB Voyager (free, no API key)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      // Dark Google-Maps-style tiles via CartoDB Dark Matter (free, no API key)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OpenStreetMap &copy; CARTO',
         subdomains: 'abcd',
         maxZoom: 20,
