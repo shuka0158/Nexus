@@ -300,7 +300,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ open, initialQuery = '', o
 
               {/* Suggestions dropdown */}
               {showSuggestions && results.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-lg bg-[#0d0d0d] border border-[#333333] shadow-2xl z-20">
+                <div className="absolute top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-lg bg-[#0d0d0d] border border-[#333333] shadow-2xl z-[1000]">
                   {results.map((f, i) => (
                     <button
                       key={i}
