@@ -19,6 +19,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { NeonButton } from '@/components/ui/NeonButton';
 import { Modal } from '@/components/ui/Modal';
 import { NeonInput } from '@/components/ui/NeonInput';
+import { MapPicker } from '@/components/ui/MapPicker';
 import { useCalendar } from '@/hooks/useCalendar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CalendarEvent, CalendarView, RecurringConfig } from '@/types';
@@ -191,6 +192,7 @@ const MiniCalendar: React.FC<{
 const EventForm: React.FC<{ values: EventFormValues; onChange: (v: EventFormValues) => void }> = ({ values, onChange }) => {
   const set = (patch: Partial<EventFormValues>) => onChange({ ...values, ...patch });
   const setRecurring = (patch: Partial<RecurringFormValues>) => set({ recurring: { ...values.recurring, ...patch } });
+  const [mapOpen, setMapOpen] = useState(false);
 
   const addReminder = () => {
     const next = REMINDER_OPTIONS.find((o) => !values.reminders.includes(o.value))?.value ?? 15;
@@ -222,8 +224,33 @@ const EventForm: React.FC<{ values: EventFormValues; onChange: (v: EventFormValu
           onChange={(e) => set({ endDate: values.allDay ? `${e.target.value}T23:59` : e.target.value })} />
       </div>
 
-      <NeonInput label="Location" placeholder="Optional location" value={values.location}
-        onChange={(e) => set({ location: e.target.value })} />
+      <div>
+        <label className="text-xs font-medium text-white/50 uppercase tracking-wider mb-1.5 block">Location</label>
+        <div className="flex items-stretch gap-2">
+          <input
+            type="text"
+            placeholder="Optional location"
+            value={values.location}
+            onChange={(e) => set({ location: e.target.value })}
+            className="flex-1 px-3 py-2 rounded bg-[#000000] border border-[#444444] text-sm text-white placeholder:text-[#555555] focus:outline-none focus:border-white focus:ring-1 focus:ring-white"
+          />
+          <button
+            type="button"
+            onClick={() => setMapOpen(true)}
+            className="flex items-center gap-1.5 px-3 rounded border border-[#444444] text-xs text-white/70 hover:text-white hover:border-white hover:bg-[#1a1a1a] transition-colors flex-shrink-0"
+            title="Pick on map"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Map</span>
+          </button>
+        </div>
+      </div>
+      <MapPicker
+        open={mapOpen}
+        initialQuery={values.location}
+        onClose={() => setMapOpen(false)}
+        onSelect={(addr) => set({ location: addr })}
+      />
 
       {/* Category */}
       <div>
