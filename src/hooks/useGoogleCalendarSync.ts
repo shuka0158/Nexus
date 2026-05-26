@@ -2,12 +2,24 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { createEvent } from '@/lib/firestore';
+import { createEvent, getEvents } from '@/lib/firestore';
 import { CalendarEvent } from '@/types';
 
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const TOKEN_KEY = 'nexus_gcal_token';
-const LAST_SYNC_KEY = 'nexus_gcal_last_sync';
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/userinfo.email',
+].join(' ');
+const ACCOUNTS_KEY = 'nexus_gcal_accounts';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ConnectedAccount {
+  email: string;
+  token: string;
+  expiry: number;          // ms timestamp
+  lastSync: string | null; // ISO
+  importCount: number;
+}
 
 export interface GCalEvent {
   id: string;
@@ -25,20 +37,20 @@ const GCAL_COLORS: Record<string, string> = {
   '9': '#5484ed', '10': '#51b749', '11': '#dc2127',
 };
 
-// ─── Token storage ────────────────────────────────────────────────────────────
+// ─── Storage ──────────────────────────────────────────────────────────────────
 
-function getStoredToken(): string | null {
+function getStoredAccounts(): ConnectedAccount[] {
   try {
-    const raw = localStorage.getItem(TOKEN_KEY);
-    if (!raw) return null;
-    const { token, expiry } = JSON.parse(raw);
-    if (Date.now() > expiry) { localStorage.removeItem(TOKEN_KEY); return null; }
-    return token;
-  } catch { return null; }
+    const raw = localStorage.getItem(ACCOUNTS_KEY);
+    if (!raw) return [];
+    const accounts = JSON.parse(raw) as ConnectedAccount[];
+    // Drop accounts whose token has expired — caller must re-auth
+    return accounts.filter((a) => Date.now() < a.expiry);
+  } catch { return []; }
 }
 
-function storeToken(token: string, expiresIn = 3600) {
-  localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, expiry: Date.now() + expiresIn * 1000 - 30000 }));
+function saveAccounts(accounts: ConnectedAccount[]) {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
 // ─── GSI loader ───────────────────────────────────────────────────────────────
@@ -56,25 +68,63 @@ function loadGSI(): Promise<void> {
   });
 }
 
-type TokenClient = { requestAccessToken: () => void };
+type TokenClient = { requestAccessToken: (opts?: { prompt?: string }) => void };
+interface OAuth2API {
+  initTokenClient: (cfg: {
+    client_id: string;
+    scope: string;
+    prompt?: string;
+    callback: (resp: { access_token?: string; expires_in?: number; error?: string }) => void;
+  }) => TokenClient;
+}
 
-async function getTokenClient(clientId: string, callback: (token: string, expiresIn: number) => void): Promise<TokenClient> {
+async function getEmailForToken(token: string): Promise<string> {
+  const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch account email');
+  const data = await res.json();
+  return data.email as string;
+}
+
+async function requestAccountToken(clientId: string): Promise<ConnectedAccount> {
   await loadGSI();
-  const g = (window as unknown as { google: { accounts: { oauth2: { initTokenClient: (cfg: unknown) => TokenClient } } } }).google;
-  return g.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: CALENDAR_SCOPE,
-    callback: (resp: { access_token?: string; expires_in?: number; error?: string }) => {
-      if (resp.error || !resp.access_token) throw new Error(resp.error ?? 'No token');
-      callback(resp.access_token, resp.expires_in ?? 3600);
-    },
+  const g = (window as unknown as { google: { accounts: { oauth2: OAuth2API } } }).google;
+  return new Promise<ConnectedAccount>((resolve, reject) => {
+    const client = g.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: SCOPES,
+      // Force the picker so the user can choose a DIFFERENT Google account each time
+      prompt: 'select_account',
+      callback: async (resp) => {
+        if (resp.error || !resp.access_token) {
+          reject(new Error(resp.error ?? 'No access token returned'));
+          return;
+        }
+        try {
+          const email = await getEmailForToken(resp.access_token);
+          resolve({
+            email,
+            token: resp.access_token,
+            expiry: Date.now() + (resp.expires_in ?? 3600) * 1000 - 30_000,
+            lastSync: null,
+            importCount: 0,
+          });
+        } catch (err) {
+          reject(err);
+        }
+      },
+    });
+    client.requestAccessToken({ prompt: 'select_account' });
   });
 }
 
 // ─── Calendar API helpers ─────────────────────────────────────────────────────
 
 async function fetchGCalEvents(token: string, timeMin: string, timeMax: string): Promise<GCalEvent[]> {
-  const params = new URLSearchParams({ timeMin, timeMax, singleEvents: 'true', orderBy: 'startTime', maxResults: '100' });
+  const params = new URLSearchParams({
+    timeMin, timeMax, singleEvents: 'true', orderBy: 'startTime', maxResults: '100',
+  });
   const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
     { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Calendar API error: ${res.status}`);
@@ -103,58 +153,71 @@ export async function pushEventToGoogle(token: string, event: Omit<CalendarEvent
 
 export function useGoogleCalendarSync(userId: string) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '';
-  const [syncing, setSyncing]     = useState(false);
-  const [connected, setConnected] = useState(false);
-  const [lastSync, setLastSync]   = useState<Date | null>(null);
-  const [importCount, setImportCount] = useState(0);
+  const [accounts, setAccounts]   = useState<ConnectedAccount[]>([]);
+  const [syncingEmail, setSyncingEmail] = useState<string | null>(null);
 
-  useEffect(() => {
-    setConnected(!!getStoredToken());
-    try {
-      const d = localStorage.getItem(LAST_SYNC_KEY);
-      if (d) setLastSync(new Date(d));
-    } catch { /* */ }
-  }, []);
+  // Load accounts on mount
+  useEffect(() => { setAccounts(getStoredAccounts()); }, []);
 
-  const login = useCallback(async () => {
+  const persist = (next: ConnectedAccount[]) => {
+    saveAccounts(next);
+    setAccounts(next);
+  };
+
+  const addAccount = useCallback(async () => {
     if (!clientId) throw new Error('Google Client ID not configured. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID to .env.local');
-    const client = await getTokenClient(clientId, (token, exp) => {
-      storeToken(token, exp);
-      setConnected(true);
-    });
-    client.requestAccessToken();
+    const acc = await requestAccountToken(clientId);
+    const current = getStoredAccounts();
+    // Replace existing entry for this email if present (re-auth flow), otherwise append
+    const next = [...current.filter((a) => a.email !== acc.email), acc];
+    persist(next);
+    return acc;
   }, [clientId]);
 
-  const disconnect = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(LAST_SYNC_KEY);
-    setConnected(false);
-    setLastSync(null);
-    setImportCount(0);
+  const removeAccount = useCallback((email: string) => {
+    persist(getStoredAccounts().filter((a) => a.email !== email));
   }, []);
 
-  const syncImport = useCallback(async (weeksAhead = 4) => {
-    const token = getStoredToken();
-    if (!token) { setConnected(false); throw new Error('Not authenticated. Please connect Google Calendar first.'); }
-    setSyncing(true);
+  const syncAccount = useCallback(async (email: string, weeksAhead = 4): Promise<number> => {
+    const all = getStoredAccounts();
+    const acc = all.find((a) => a.email === email);
+    if (!acc) throw new Error(`Account ${email} is not connected.`);
+    if (Date.now() > acc.expiry) {
+      throw new Error(`Session expired for ${email}. Please reconnect this account.`);
+    }
+
+    setSyncingEmail(email);
     try {
       const now = new Date();
-      const future = new Date(now.getTime() + weeksAhead * 7 * 86400000);
-      const events = await fetchGCalEvents(token, now.toISOString(), future.toISOString());
+      const future = new Date(now.getTime() + weeksAhead * 7 * 86_400_000);
+      const gEvents = await fetchGCalEvents(acc.token, now.toISOString(), future.toISOString());
+
+      // Dedupe against events already in Firestore for this user
+      const existing = await getEvents(userId);
+      const existingKeys = new Set(
+        existing.map((e) => `${e.title.toLowerCase()}|${e.startDate.toMillis()}`),
+      );
 
       let imported = 0;
-      for (const e of events) {
+      for (const e of gEvents) {
         const startRaw = e.start.dateTime ?? e.start.date;
         const endRaw   = e.end.dateTime   ?? e.end.date;
         if (!startRaw || !endRaw) continue;
         const allDay = !e.start.dateTime;
+        const startDate = new Date(startRaw);
+        const endDate   = new Date(endRaw);
+        const title = e.summary ?? 'Untitled';
+
+        const key = `${title.toLowerCase()}|${startDate.getTime()}`;
+        if (existingKeys.has(key)) continue; // skip duplicates
+
         await createEvent({
           userId,
-          title:           e.summary ?? 'Untitled',
-          description:     e.description ?? '',
+          title,
+          description:     (e.description ? e.description + '\n\n' : '') + `(from ${email})`,
           allDay,
-          startDate:       Timestamp.fromDate(new Date(startRaw)),
-          endDate:         Timestamp.fromDate(new Date(endRaw)),
+          startDate:       Timestamp.fromDate(startDate),
+          endDate:         Timestamp.fromDate(endDate),
           color:           e.colorId ? (GCAL_COLORS[e.colorId] ?? '#4285f4') : '#4285f4',
           category:        'google-calendar',
           location:        e.location ?? '',
@@ -162,24 +225,52 @@ export function useGoogleCalendarSync(userId: string) {
           reminderMinutes: [],
           attendees:       [],
         });
+        existingKeys.add(key);
         imported++;
       }
 
-      const now2 = new Date();
-      localStorage.setItem(LAST_SYNC_KEY, now2.toISOString());
-      setLastSync(now2);
-      setImportCount(imported);
+      const next = all.map((a) =>
+        a.email === email
+          ? { ...a, lastSync: new Date().toISOString(), importCount: imported }
+          : a,
+      );
+      persist(next);
       return imported;
     } finally {
-      setSyncing(false);
+      setSyncingEmail(null);
     }
   }, [userId]);
 
-  const pushEvent = useCallback(async (event: Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
-    const token = getStoredToken();
-    if (!token) { setConnected(false); throw new Error('Not connected to Google Calendar'); }
-    return pushEventToGoogle(token, event);
+  const syncAll = useCallback(async (weeksAhead = 4): Promise<{ email: string; imported: number; error?: string }[]> => {
+    const list = getStoredAccounts();
+    const results: { email: string; imported: number; error?: string }[] = [];
+    for (const a of list) {
+      try {
+        const n = await syncAccount(a.email, weeksAhead);
+        results.push({ email: a.email, imported: n });
+      } catch (err) {
+        results.push({ email: a.email, imported: 0, error: err instanceof Error ? err.message : 'unknown error' });
+      }
+    }
+    return results;
+  }, [syncAccount]);
+
+  const pushEvent = useCallback(async (event: Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, email?: string) => {
+    const list = getStoredAccounts();
+    const acc = email ? list.find((a) => a.email === email) : list[0];
+    if (!acc) throw new Error('No Google account connected.');
+    if (Date.now() > acc.expiry) throw new Error(`Session expired for ${acc.email}. Reconnect to push events.`);
+    return pushEventToGoogle(acc.token, event);
   }, []);
 
-  return { connected, syncing, lastSync, importCount, clientId, login, disconnect, syncImport, pushEvent };
+  return {
+    accounts,
+    syncingEmail,
+    clientId,
+    addAccount,
+    removeAccount,
+    syncAccount,
+    syncAll,
+    pushEvent,
+  };
 }

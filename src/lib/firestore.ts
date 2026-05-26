@@ -140,6 +140,16 @@ export const subscribeToEvents = (
   );
 };
 
+export const getEvents = async (uid: string): Promise<CalendarEvent[]> => {
+  const q = query(
+    collection(db, 'events'),
+    where('userId', '==', uid),
+    orderBy('startDate', 'asc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CalendarEvent);
+};
+
 export const subscribeToAllEvents = (uid: string, cb: (events: CalendarEvent[]) => void) => {
   const q = query(
     collection(db, 'events'),
