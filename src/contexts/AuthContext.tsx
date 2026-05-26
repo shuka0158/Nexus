@@ -21,6 +21,7 @@ import { Timestamp } from 'firebase/firestore';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  hadSession: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -39,21 +40,53 @@ export const useAuth = () => {
   return ctx;
 };
 
+const SESSION_HINT_KEY = 'nexus_session_hint';
+
+const hasSessionHint = (): boolean => {
+  try { return typeof window !== 'undefined' && localStorage.getItem(SESSION_HINT_KEY) === '1'; }
+  catch { return false; }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // hadSession: true if last session was logged-in. Keeps gates closed during Firebase bootstrap
+  // so routes don't briefly think the user is logged out and redirect to /login.
+  // Cleared once auth resolves with no user (e.g. signed out elsewhere, stale localStorage).
+  const [hadSession, setHadSession] = useState<boolean>(hasSessionHint);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsub: (() => void) | null = null;
+
+    const applyAuth = (firebaseUser: User | null) => {
       setUser(firebaseUser);
-      if (firebaseUser) {
-        try {
-          await updateUserProfile(firebaseUser.uid, { lastSeen: Timestamp.now() });
-        } catch { /* non-critical — don't block loading */ }
-      }
+      try {
+        if (firebaseUser) {
+          localStorage.setItem(SESSION_HINT_KEY, '1');
+          setHadSession(true);
+        } else {
+          localStorage.removeItem(SESSION_HINT_KEY);
+          setHadSession(false);
+        }
+      } catch { /* ignore */ }
+    };
+
+    // Wait until Firebase has fully restored persisted state before flipping loading off
+    auth.authStateReady().then(() => {
+      applyAuth(auth.currentUser);
       setLoading(false);
+
+      // After bootstrap, subscribe to subsequent changes
+      unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+        applyAuth(firebaseUser);
+        if (firebaseUser) {
+          try { await updateUserProfile(firebaseUser.uid, { lastSeen: Timestamp.now() }); }
+          catch { /* non-critical */ }
+        }
+      });
     });
-    return unsub;
+
+    return () => { if (unsub) unsub(); };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -113,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{
-      user, loading,
+      user, loading, hadSession,
       signIn, signUp, signInWithGoogle,
       logout, resetPassword,
       updateUserDisplayName, updateUserEmail, updateUserPassword,

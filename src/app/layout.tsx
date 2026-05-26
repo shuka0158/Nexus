@@ -60,6 +60,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/*
+          Synchronous early redirect: if the user had a logged-in session last time
+          (hint stored on sign-in), don't even let the public pages mount — bounce
+          straight to /dashboard so they never see /login or the landing flash.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                if (typeof localStorage !== 'undefined' && localStorage.getItem('nexus_session_hint') === '1') {
+                  var p = window.location.pathname;
+                  if (p === '/' || p === '/login' || p === '/register' || p === '/forgot-password') {
+                    window.location.replace('/dashboard');
+                  }
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
       </head>
       <body className={`${inter.variable} font-sans bg-dark-900 text-white antialiased`}>
         <AuthProvider>

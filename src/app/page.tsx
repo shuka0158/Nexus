@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -8,6 +8,7 @@ import {
   Sparkles, Bell, Smartphone, Zap, ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 
 const FEATURES = [
   { icon: Calendar,    title: 'Smart Calendar',    desc: 'Month, week, day, year & agenda views with drag-and-drop events, recurring schedules and multiple reminders. Syncs with multiple Google accounts.' },
@@ -22,13 +23,20 @@ const FEATURES = [
 ];
 
 export default function HomePage() {
-  const { user, loading } = useAuth();
+  const { user, loading, hadSession } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Redirect authenticated users straight to their dashboard
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard');
   }, [user, loading, router]);
+
+  // At build time and first hydration: render the landing (good for SEO + crawlers).
+  // After mount: if a session is being restored, replace with the splash to avoid
+  // a flash of the marketing page before redirect.
+  if (mounted && (loading || hadSession || user)) return <LoadingScreen />;
 
   return (
     <main className="min-h-screen text-white" style={{ background: '#000000' }}>
