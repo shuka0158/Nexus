@@ -9,11 +9,14 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://nexus-future.web.app'),
   title: 'NEXUS — Productivity OS',
-  description: 'A futuristic cyberpunk productivity platform. Manage your calendar, tasks, reminders and more.',
-  keywords: ['productivity', 'calendar', 'tasks', 'pomodoro', 'cyberpunk', 'PWA'],
-  authors: [{ name: 'NEXUS' }],
+  description: 'NEXUS is an all-in-one productivity platform: calendar with Google sync, tasks (Kanban + list), habits, goals, notes, pomodoro timer, and a built-in AI assistant. Free, installable as a PWA, dark-mode native.',
+  keywords: ['productivity app', 'calendar', 'tasks', 'todo', 'kanban', 'pomodoro', 'habits', 'goals', 'notes', 'PWA', 'google calendar sync', 'AI assistant'],
+  authors: [{ name: 'shuka0158' }],
   manifest: '/manifest.json',
+  alternates: { canonical: 'https://nexus-future.web.app/' },
+  robots: { index: true, follow: true },
   icons: {
     apple: '/icons/apple-touch-icon.png',
     icon: [
@@ -24,8 +27,17 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'NEXUS — Productivity OS',
-    description: 'A futuristic cyberpunk productivity platform',
+    description: 'All-in-one productivity: calendar, tasks, habits, goals, notes, pomodoro, AI assistant. Free PWA.',
     type: 'website',
+    url: 'https://nexus-future.web.app/',
+    siteName: 'NEXUS',
+    images: [{ url: '/icons/icon-512x512.png', width: 512, height: 512, alt: 'NEXUS' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'NEXUS — Productivity OS',
+    description: 'All-in-one productivity: calendar, tasks, habits, goals, notes, pomodoro, AI assistant. Free PWA.',
+    images: ['/icons/icon-512x512.png'],
   },
   appleWebApp: {
     capable: true,

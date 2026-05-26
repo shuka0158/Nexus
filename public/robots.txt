@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /calendar/
+Disallow: /todos/
+Disallow: /habits/
+Disallow: /goals/
+Disallow: /notes/
+Disallow: /time-blocking/
+Disallow: /weekly-review/
+Disallow: /shared/
+Disallow: /notifications/
+Disallow: /pomodoro/
+Disallow: /settings/
+Disallow: /event
+
+Sitemap: https://nexus-future.web.app/sitemap.xml
