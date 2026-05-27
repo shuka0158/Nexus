@@ -21,16 +21,17 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   aiResponse?: AIResponse;
+  aiBatch?: AIResponse[];
   loading?: boolean;
   error?: boolean;
 }
 
 const SUGGESTIONS = [
-  'Online meeting this Saturday at 18:00',
+  'Buy milk. Email John. Meeting Friday at 3pm.',
   'What do I have this week?',
   'What\'s on my schedule today?',
-  'Delete team meeting',
   'Remind me to review the report by Thursday',
+  'Delete duplicate events',
 ];
 
 // ─── Created item card ────────────────────────────────────────────────────────
@@ -163,22 +164,38 @@ export const NexusAIChat: React.FC = () => {
 
       const response = processWithContext(text, events, todos);
 
-      let savedOk = false;
-      const needsFirestore = response.action === 'create_event' || response.action === 'create_todo' || response.action === 'delete_event';
-      if (needsFirestore) {
-        try {
-          await executeAIResponse(response, user.uid);
-          savedOk = true;
-        } catch {
-          toast.error('Could not save to Firestore — check your connection.');
+      // Batch (brain dump): persist each item, then render one card per saved item
+      if (response.batch && response.batch.length > 0) {
+        const savedItems: AIResponse[] = [];
+        for (const item of response.batch) {
+          try {
+            await executeAIResponse(item, user.uid);
+            savedItems.push(item);
+          } catch { /* skip failed individual items */ }
         }
-      }
+        patchMsg(loadId, {
+          text: response.message,
+          loading: false,
+          aiBatch: savedItems,
+        });
+      } else {
+        let savedOk = false;
+        const needsFirestore = response.action === 'create_event' || response.action === 'create_todo' || response.action === 'delete_event';
+        if (needsFirestore) {
+          try {
+            await executeAIResponse(response, user.uid);
+            savedOk = true;
+          } catch {
+            toast.error('Could not save to Firestore — check your connection.');
+          }
+        }
 
-      patchMsg(loadId, {
-        text: response.message,
-        loading: false,
-        aiResponse: (savedOk && (response.action === 'create_event' || response.action === 'create_todo')) ? response : undefined,
-      });
+        patchMsg(loadId, {
+          text: response.message,
+          loading: false,
+          aiResponse: (savedOk && (response.action === 'create_event' || response.action === 'create_todo')) ? response : undefined,
+        });
+      }
     } catch {
       patchMsg(loadId, { text: 'Something went wrong. Please try again.', loading: false, error: true });
     } finally {
@@ -329,6 +346,13 @@ export const NexusAIChat: React.FC = () => {
 
                       {msg.aiResponse && msg.aiResponse.action !== 'reply' && !msg.loading && (
                         <CreatedItemCard response={msg.aiResponse} />
+                      )}
+                      {msg.aiBatch && !msg.loading && (
+                        <div className="space-y-2 mt-2">
+                          {msg.aiBatch.map((item, i) => (
+                            <CreatedItemCard key={i} response={item} />
+                          ))}
+                        </div>
                       )}
                     </div>
                   </motion.div>

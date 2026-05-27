@@ -13,6 +13,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTodos } from '@/hooks/useTodos';
 import { useCalendar } from '@/hooks/useCalendar';
+import { NextEventCountdown } from '@/components/dashboard/NextEventCountdown';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const QUOTES = [
@@ -139,26 +140,29 @@ export default function DashboardPage() {
               background: `radial-gradient(ellipse at top right, ${theme.accentColor}15 0%, transparent 60%)`,
             }}
           />
-          <div className="relative z-10 flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-xl font-semibold text-white truncate">{greeting} 👋</h2>
-              <p className="text-white/50 text-xs sm:text-sm mt-1">
-                <span className="text-white font-medium">{stats.inProgress}</span> tasks in progress
-                {' · '}<span className="text-white font-medium">{upcomingEvents.length}</span> upcoming events
-              </p>
-            </div>
-            <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-              <div
-                className="px-3 py-1.5 rounded-xl text-sm font-medium"
-                style={{
-                  background: `${theme.accentColor}20`,
-                  color: theme.accentColor,
-                  border: `1px solid ${theme.accentColor}30`,
-                }}
-              >
-                {stats.completionRate}% complete
+          <div className="relative z-10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base sm:text-xl font-semibold text-white truncate">{greeting} 👋</h2>
+                <p className="text-white/50 text-xs sm:text-sm mt-1">
+                  <span className="text-white font-medium">{stats.inProgress}</span> tasks in progress
+                  {' · '}<span className="text-white font-medium">{upcomingEvents.length}</span> upcoming events
+                </p>
+              </div>
+              <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+                <div
+                  className="px-3 py-1.5 rounded-xl text-sm font-medium"
+                  style={{
+                    background: `${theme.accentColor}20`,
+                    color: theme.accentColor,
+                    border: `1px solid ${theme.accentColor}30`,
+                  }}
+                >
+                  {stats.completionRate}% complete
+                </div>
               </div>
             </div>
+            <NextEventCountdown events={upcomingEvents} accentColor={theme.accentColor} />
           </div>
         </motion.div>
 

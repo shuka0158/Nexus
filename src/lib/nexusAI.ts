@@ -28,6 +28,10 @@ export interface AIResponse {
   event?: AIEventData;
   todo?: AITodoData;
   deletedEventIds?: string[];
+  // Multi-item "brain dump": when the user types several things at once,
+  // each gets its own response. batch is set on the outer envelope and the
+  // outer action is 'reply' with a summary message.
+  batch?: AIResponse[];
 }
 
 // ─── Regex banks ──────────────────────────────────────────────────────────────
@@ -301,6 +305,76 @@ export function parseUserInput(input: string): AIResponse {
   };
 }
 
+// ─── Brain dump (multi-item) ──────────────────────────────────────────────────
+
+// Strong action-verb starters that indicate a fresh item after a comma
+const ACTION_VERB_RX = /^\s*(buy|email|send|finish|complete|submit|prepare|check|update|write|read|research|fix|plan|book|order|pay|pick\s+up|call|meet|meeting|lunch|dinner|breakfast|brunch|review|sync|interview|appointment|appt|standup|workout|gym|don'?t\s+forget|remind\s+me)/i;
+
+function splitBrainDump(input: string): string[] {
+  // Split on sentence terminators first
+  const sentences = input.split(/[.;\n]+/).map((s) => s.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  for (const sentence of sentences) {
+    const subparts = sentence.split(/,\s+/);
+    if (subparts.length === 1) {
+      result.push(sentence);
+      continue;
+    }
+    // Split on comma only when the next fragment starts with an action verb
+    let buffer = subparts[0];
+    for (let i = 1; i < subparts.length; i++) {
+      if (ACTION_VERB_RX.test(subparts[i])) {
+        result.push(buffer);
+        buffer = subparts[i];
+      } else {
+        buffer += ', ' + subparts[i];
+      }
+    }
+    result.push(buffer);
+  }
+
+  return result.map((s) => s.trim()).filter(Boolean);
+}
+
+function tryBrainDump(input: string, events: CalendarEvent[]): AIResponse | null {
+  const fragments = splitBrainDump(input);
+  if (fragments.length < 2) return null;
+
+  const items: AIResponse[] = [];
+  for (const frag of fragments) {
+    const r = parseUserInput(frag);
+    if (r.action !== 'create_event' && r.action !== 'create_todo') continue;
+
+    // Skip duplicate event creations
+    if (r.action === 'create_event' && r.event) {
+      const newTitle = r.event.title.toLowerCase();
+      const newMs = new Date(r.event.startDate).getTime();
+      const dup = events.find((e) =>
+        e.title.toLowerCase() === newTitle &&
+        Math.abs(e.startDate.toMillis() - newMs) < 60_000,
+      );
+      if (dup) continue;
+    }
+    items.push(r);
+  }
+
+  if (items.length < 2) return null;
+
+  const eventCount = items.filter((r) => r.action === 'create_event').length;
+  const todoCount  = items.filter((r) => r.action === 'create_todo').length;
+  const parts = [
+    eventCount && `${eventCount} event${eventCount !== 1 ? 's' : ''}`,
+    todoCount && `${todoCount} task${todoCount !== 1 ? 's' : ''}`,
+  ].filter(Boolean) as string[];
+
+  return {
+    action: 'reply',
+    message: `Captured ${parts.join(' and ')} from your brain dump.`,
+    batch: items,
+  };
+}
+
 // ─── Context-aware processing ─────────────────────────────────────────────────
 
 export function processWithContext(
@@ -309,6 +383,10 @@ export function processWithContext(
   todos: Todo[],
 ): AIResponse {
   const raw = input.trim();
+
+  // Brain-dump: if it parses cleanly as 2+ items, return them as a batch
+  const brain = tryBrainDump(raw, events);
+  if (brain) return brain;
 
   // ── Task list query (order-independent: "what tasks do i have", "my todos", etc.) ──
   const taskQueryOpener = /\b(what|what'?s|do i have|show me|list|any|are there|are my|my|all my)\b/i;
