@@ -25,9 +25,10 @@ const SHORTCUTS = [
     { keys: ['T'], desc: 'Go to today' },
   ]},
   { category: 'General', items: [
+    { keys: ['/'], desc: 'Open AI chat (quick capture)' },
+    { keys: ['Space'], desc: 'Open AI chat (quick capture)' },
     { keys: ['?'], desc: 'Show shortcuts' },
     { keys: ['Ctrl', 'K'], desc: 'Command palette' },
-    { keys: ['/'], desc: 'Focus search' },
   ]},
 ];
 

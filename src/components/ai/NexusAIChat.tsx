@@ -137,6 +137,28 @@ export const NexusAIChat: React.FC = () => {
     if (open) setTimeout(() => inputRef.current?.focus(), 260);
   }, [open]);
 
+  // Quick-capture hotkeys: "/" or Space anywhere in the app opens the AI chat.
+  // Skipped if user is typing in any input/textarea/contenteditable, or if a
+  // modifier is held (Cmd/Ctrl-Space is common in OS shortcuts).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (open) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      const tag = t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (t.isContentEditable) return;
+
+      if (e.key === '/' || e.key === ' ') {
+        e.preventDefault();
+        setOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [open]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -225,7 +247,7 @@ export const NexusAIChat: React.FC = () => {
           background: `linear-gradient(135deg, ${theme.accentColor}, ${theme.secondaryColor})`,
           boxShadow: `0 8px 28px ${theme.accentColor}50, 0 0 0 1px ${theme.accentColor}20`,
         }}
-        title="NEXUS AI"
+        title="NEXUS AI · Press / or Space"
       >
         <AnimatePresence mode="wait">
           {open
