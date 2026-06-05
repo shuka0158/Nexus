@@ -936,7 +936,13 @@ const IntegrationsTab = () => {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('appearance');
+  // Initial tab respects ?tab= query param so callers can deep-link
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === 'undefined') return 'appearance';
+    const t = new URLSearchParams(window.location.search).get('tab');
+    const allowed = ['appearance', 'profile', 'notifications', 'security', 'integrations', 'data'];
+    return t && allowed.includes(t) ? t : 'appearance';
+  });
 
   return (
     <DashboardLayout title="Settings" subtitle="Customize your NEXUS experience">

@@ -337,24 +337,42 @@ function splitBrainDump(input: string): string[] {
   return result.map((s) => s.trim()).filter(Boolean);
 }
 
-function tryBrainDump(input: string, events: CalendarEvent[]): AIResponse | null {
+function tryBrainDump(input: string, events: CalendarEvent[], todos: Todo[]): AIResponse | null {
   const fragments = splitBrainDump(input);
   if (fragments.length < 2) return null;
 
   const items: AIResponse[] = [];
+  // Track within-batch titles too, so "buy milk. buy milk." doesn't create two
+  const seenTitles = new Set<string>();
+
   for (const frag of fragments) {
     const r = parseUserInput(frag);
     if (r.action !== 'create_event' && r.action !== 'create_todo') continue;
 
-    // Skip duplicate event creations
+    // Dedupe events against existing calendar (same title + start within 1min)
     if (r.action === 'create_event' && r.event) {
       const newTitle = r.event.title.toLowerCase();
       const newMs = new Date(r.event.startDate).getTime();
+      const key = `event|${newTitle}|${newMs}`;
+      if (seenTitles.has(key)) continue;
       const dup = events.find((e) =>
         e.title.toLowerCase() === newTitle &&
         Math.abs(e.startDate.toMillis() - newMs) < 60_000,
       );
       if (dup) continue;
+      seenTitles.add(key);
+    }
+
+    // Dedupe todos against existing open tasks AND within-batch (same title)
+    if (r.action === 'create_todo' && r.todo) {
+      const newTitle = r.todo.title.toLowerCase();
+      const key = `todo|${newTitle}`;
+      if (seenTitles.has(key)) continue;
+      const dup = todos.find((t) =>
+        t.status !== 'done' && t.title.toLowerCase() === newTitle,
+      );
+      if (dup) continue;
+      seenTitles.add(key);
     }
     items.push(r);
   }
@@ -385,7 +403,7 @@ export function processWithContext(
   const raw = input.trim();
 
   // Brain-dump: if it parses cleanly as 2+ items, return them as a batch
-  const brain = tryBrainDump(raw, events);
+  const brain = tryBrainDump(raw, events, todos);
   if (brain) return brain;
 
   // ── Task list query (order-independent: "what tasks do i have", "my todos", etc.) ──

@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckSquare, Calendar, Zap, Target, TrendingUp, Clock, Cloud, Sun, CloudRain, CloudSnow, Wind, Quote } from 'lucide-react';
+import { CheckSquare, Calendar, Zap, Target, TrendingUp, Clock, Cloud, Sun, CloudRain, CloudSnow, Wind, Quote, Sparkles, Link2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { format, subDays, startOfDay } from 'date-fns';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatsCard } from '@/components/dashboard/StatsCard';
@@ -87,6 +88,7 @@ export default function DashboardPage() {
   const { todos, stats } = useTodos();
   const { upcomingEvents } = useCalendar();
   const { theme } = useTheme();
+  const router = useRouter();
 
   const activityData = useMemo(() => {
     return Array.from({ length: 14 }, (_, i) => {
@@ -120,10 +122,65 @@ export default function DashboardPage() {
   const greeting = `${greetingByHour()}, ${user?.displayName?.split(' ')[0] ?? 'there'}`;
   const weather = useWeather();
   const quote = useMemo(() => QUOTES[new Date().getDate() % QUOTES.length], []);
+  const isEmpty = stats.total === 0 && upcomingEvents.length === 0;
 
   return (
     <DashboardLayout title="Dashboard" subtitle={format(new Date(), 'EEEE, MMMM d, yyyy')}>
       <div className="space-y-6 max-w-7xl mx-auto">
+        {/* First-run onboarding (only when there's no data yet) */}
+        {isEmpty && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative rounded-2xl p-5 sm:p-6 border border-[#333333]"
+            style={{
+              background: `linear-gradient(135deg, ${theme.accentColor}10 0%, ${theme.secondaryColor}06 100%)`,
+            }}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${theme.accentColor}20`, border: `1px solid ${theme.accentColor}40` }}>
+                <Sparkles className="w-5 h-5" style={{ color: theme.accentColor }} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-semibold text-white">Welcome to NEXUS</h3>
+                <p className="text-xs sm:text-sm text-white/50 mt-0.5">Start by capturing what&apos;s on your mind — fastest way is the AI chat.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('open-ai-chat'))}
+                className="flex items-center gap-3 p-3 rounded-xl border border-[#333333] hover:border-white hover:bg-[#111111] transition-all text-left"
+                title="Press / to open"
+              >
+                <span className="w-7 h-7 rounded-md bg-[#1a1a1a] flex items-center justify-center text-[10px] text-white font-mono">/</span>
+                <span className="text-sm text-white">Open the AI chat — try a brain dump</span>
+              </button>
+              <button
+                onClick={() => router.push('/calendar')}
+                className="flex items-center gap-3 p-3 rounded-xl border border-[#333333] hover:border-white hover:bg-[#111111] transition-all text-left"
+              >
+                <Calendar className="w-5 h-5 text-white/60" />
+                <span className="text-sm text-white">Add your first calendar event</span>
+              </button>
+              <button
+                onClick={() => router.push('/todos')}
+                className="flex items-center gap-3 p-3 rounded-xl border border-[#333333] hover:border-white hover:bg-[#111111] transition-all text-left"
+              >
+                <CheckSquare className="w-5 h-5 text-white/60" />
+                <span className="text-sm text-white">Capture a task</span>
+              </button>
+              <button
+                onClick={() => router.push('/settings?tab=integrations')}
+                className="flex items-center gap-3 p-3 rounded-xl border border-[#333333] hover:border-white hover:bg-[#111111] transition-all text-left"
+              >
+                <Link2 className="w-5 h-5 text-white/60" />
+                <span className="text-sm text-white">Connect Google Calendar</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Welcome banner */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

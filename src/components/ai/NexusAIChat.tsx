@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, X, Send, Bot, User, Calendar, CheckSquare,
-  ChevronDown, Loader2, Trash2,
+  ChevronDown, Loader2, Trash2, Mic, MicOff,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -123,8 +123,11 @@ export const NexusAIChat: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [events, setEvents]   = useState<CalendarEvent[]>([]);
   const [todos, setTodos]     = useState<Todo[]>([]);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -137,23 +140,82 @@ export const NexusAIChat: React.FC = () => {
     if (open) setTimeout(() => inputRef.current?.focus(), 260);
   }, [open]);
 
-  // Quick-capture hotkeys: "/" or Space anywhere in the app opens the AI chat.
-  // Skipped if user is typing in any input/textarea/contenteditable, or if a
-  // modifier is held (Cmd/Ctrl-Space is common in OS shortcuts).
+  // Voice input via Web Speech API (Chrome/Edge/Safari)
+  useEffect(() => {
+    const win = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+    setVoiceSupported(!!(win.SpeechRecognition || win.webkitSpeechRecognition));
+  }, []);
+
+  const toggleVoice = () => {
+    const win = window as unknown as {
+      SpeechRecognition?: new () => unknown;
+      webkitSpeechRecognition?: new () => unknown;
+    };
+    const Ctor = (win.SpeechRecognition || win.webkitSpeechRecognition) as
+      | (new () => {
+          continuous: boolean; interimResults: boolean; lang: string;
+          start: () => void; stop: () => void;
+          onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>>; resultIndex: number }) => void) | null;
+          onend: (() => void) | null;
+          onerror: ((e: { error: string }) => void) | null;
+        })
+      | undefined;
+    if (!Ctor) return;
+
+    if (listening && recognitionRef.current) {
+      (recognitionRef.current as { stop: () => void }).stop();
+      return;
+    }
+
+    const rec = new Ctor();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = navigator.language || 'en-US';
+    rec.onresult = (e) => {
+      let transcript = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      setInput(transcript);
+    };
+    rec.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    rec.onerror = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    rec.start();
+    recognitionRef.current = rec;
+    setListening(true);
+  };
+
+  // Allow other components to open the chat by dispatching a custom event
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener('open-ai-chat', handler);
+    return () => window.removeEventListener('open-ai-chat', handler);
+  }, []);
+
+  // Quick-capture hotkey: "/" anywhere opens the AI chat.
+  // "/" was chosen as primary because it's safe — doesn't break Space-to-scroll
+  // or Space-to-activate-focused-buttons.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (open) return;
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key !== '/') return;
       const t = e.target as HTMLElement | null;
       if (!t) return;
       const tag = t.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // Don't hijack while typing or while focused on an interactive control
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
       if (t.isContentEditable) return;
+      if (t.getAttribute('role') === 'button') return;
 
-      if (e.key === '/' || e.key === ' ') {
-        e.preventDefault();
-        setOpen(true);
-      }
+      e.preventDefault();
+      setOpen(true);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -247,7 +309,7 @@ export const NexusAIChat: React.FC = () => {
           background: `linear-gradient(135deg, ${theme.accentColor}, ${theme.secondaryColor})`,
           boxShadow: `0 8px 28px ${theme.accentColor}50, 0 0 0 1px ${theme.accentColor}20`,
         }}
-        title="NEXUS AI · Press / or Space"
+        title="NEXUS AI · Press /"
       >
         <AnimatePresence mode="wait">
           {open
@@ -392,12 +454,28 @@ export const NexusAIChat: React.FC = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder="e.g. Online meeting this Saturday at 18:00"
+                  placeholder="Brain dump or single request…"
                   rows={1}
                   disabled={sending}
                   className="flex-1 bg-transparent text-sm text-white resize-none focus:outline-none placeholder-white/25 max-h-[80px] leading-5 disabled:opacity-50"
                   style={{ scrollbarWidth: 'none' }}
                 />
+                {voiceSupported && (
+                  <motion.button
+                    onClick={toggleVoice}
+                    disabled={sending}
+                    whileTap={{ scale: 0.9 }}
+                    className={cn(
+                      'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                      listening
+                        ? 'bg-red-500 text-white animate-pulse'
+                        : 'bg-[#1a1a1a] text-white/70 hover:text-white hover:bg-[#222222]',
+                    )}
+                    title={listening ? 'Stop listening' : 'Speak your input'}
+                  >
+                    {listening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                  </motion.button>
+                )}
                 <motion.button
                   onClick={() => send()}
                   disabled={!input.trim() || sending}
@@ -411,7 +489,9 @@ export const NexusAIChat: React.FC = () => {
                     : <Send    className="w-3.5 h-3.5 text-black" />}
                 </motion.button>
               </div>
-              <p className="text-center text-[10px] text-white/20 mt-1.5">Enter to send · Shift+Enter for new line</p>
+              <p className="text-center text-[10px] text-white/20 mt-1.5">
+                Enter to send · Shift+Enter for new line{voiceSupported && ' · 🎤 voice supported'}
+              </p>
             </div>
           </motion.div>
         )}
