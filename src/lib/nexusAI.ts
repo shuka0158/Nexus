@@ -1,9 +1,46 @@
 import * as chrono from 'chrono-node';
 import { Timestamp } from 'firebase/firestore';
 import { createEvent, createTodo, deleteEvent } from './firestore';
+import { breakdownTask, geminiAvailable } from './gemini';
 import type { CalendarEvent, Todo } from '@/types';
 
-export type AIAction = 'create_event' | 'create_todo' | 'delete_event' | 'query_schedule' | 'reply';
+export type AIAction = 'create_event' | 'create_todo' | 'delete_event' | 'query_schedule' | 'reply' | 'breakdown';
+
+const BREAKDOWN_RX = /^\s*(?:\/breakdown|break\s*(?:it|this)?\s*down|split\s*(?:this|it)?|how\s+do\s+i)\s*[:\-]?\s*(.+)$/i;
+
+export function detectBreakdownIntent(input: string): string | null {
+  const m = input.trim().match(BREAKDOWN_RX);
+  if (!m) return null;
+  const task = m[1].trim();
+  return task.length >= 3 ? task : null;
+}
+
+export async function processBreakdown(taskTitle: string): Promise<AIResponse> {
+  if (!geminiAvailable()) {
+    return {
+      action: 'reply',
+      message: 'Task breakdown needs the Gemini AI key. Add NEXT_PUBLIC_GEMINI_API_KEY to .env.local — see Settings → Integrations.',
+    };
+  }
+  try {
+    const steps = await breakdownTask(taskTitle);
+    if (steps.length === 0) {
+      return { action: 'reply', message: `Couldn't break down "${taskTitle}" — try rephrasing.` };
+    }
+    const lines = steps.map((s, i) => `${i + 1}. ${s.title}${s.estimatedMinutes ? `  (${s.estimatedMinutes} min)` : ''}`);
+    return {
+      action: 'breakdown',
+      message: `Broke "${taskTitle}" into ${steps.length} steps:\n\n${lines.join('\n')}`,
+      breakdownSteps: steps.map((s) => ({ title: s.title, estimatedMinutes: s.estimatedMinutes })),
+      breakdownSourceTask: taskTitle,
+    };
+  } catch (err) {
+    return {
+      action: 'reply',
+      message: 'Breakdown failed: ' + (err instanceof Error ? err.message : 'unknown error'),
+    };
+  }
+}
 
 export interface AIEventData {
   title: string;
@@ -28,10 +65,11 @@ export interface AIResponse {
   event?: AIEventData;
   todo?: AITodoData;
   deletedEventIds?: string[];
-  // Multi-item "brain dump": when the user types several things at once,
-  // each gets its own response. batch is set on the outer envelope and the
-  // outer action is 'reply' with a summary message.
+  // Multi-item "brain dump"
   batch?: AIResponse[];
+  // AI-powered breakdown of a complex task into subtasks
+  breakdownSteps?: { title: string; estimatedMinutes?: number }[];
+  breakdownSourceTask?: string;
 }
 
 // ─── Regex banks ──────────────────────────────────────────────────────────────

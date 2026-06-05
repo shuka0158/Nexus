@@ -929,6 +929,49 @@ const IntegrationsTab = () => {
           Imported events stay even if you later disconnect the account.
         </p>
       </div>
+
+      {/* ── Gemini AI ── */}
+      <div className="mt-8">
+        <h3 className="text-sm font-semibold text-white mb-1">AI provider (Gemini)</h3>
+        <p className="text-xs text-white/40">
+          Unlocks task breakdown and smarter natural-language parsing. Free tier covers personal use.
+        </p>
+      </div>
+
+      <div className="p-4 rounded-2xl border border-[#333333] bg-[#111111]">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+            style={{ background: 'linear-gradient(135deg, #4285f4 0%, #9333ea 100%)' }}>
+            ✨
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">Gemini API</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {process.env.NEXT_PUBLIC_GEMINI_API_KEY ? (
+                <><CheckCircle2 className="w-3.5 h-3.5 text-green-400" /><span className="text-xs text-green-400">Configured</span></>
+              ) : (
+                <><XCircle className="w-3.5 h-3.5 text-white/30" /><span className="text-xs text-white/40">Not configured</span></>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {!process.env.NEXT_PUBLIC_GEMINI_API_KEY && (
+          <ol className="text-xs text-white/50 space-y-1.5 list-decimal ml-4 mb-3">
+            <li>Open <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" className="text-white underline">aistudio.google.com/app/apikey</a></li>
+            <li>Click <span className="text-white/70">Create API key</span> (free, no billing required)</li>
+            <li>Copy the key and add to your <code className="text-white/70 bg-[#1a1a1a] px-1.5 py-0.5 rounded">.env.local</code>:<br />
+              <code className="text-[#00d4ff] text-[10px]">NEXT_PUBLIC_GEMINI_API_KEY=your-key-here</code>
+            </li>
+            <li>Rebuild and deploy</li>
+          </ol>
+        )}
+
+        <p className="text-[11px] text-white/30 leading-relaxed">
+          When configured, try <span className="text-white/60 font-mono">break down: write the quarterly report</span> in the AI chat to get a list of small, doable subtasks.
+          Data is sent to Google&apos;s Generative Language API — review their terms if you handle sensitive content.
+        </p>
+      </div>
     </div>
   );
 };

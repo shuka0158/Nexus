@@ -9,7 +9,9 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
-import { processWithContext, executeAIResponse, AIResponse } from '@/lib/nexusAI';
+import { processWithContext, executeAIResponse, AIResponse, detectBreakdownIntent, processBreakdown } from '@/lib/nexusAI';
+import { createTodo } from '@/lib/firestore';
+import { Timestamp } from 'firebase/firestore';
 import { subscribeToAllEvents, subscribeToTodos } from '@/lib/firestore';
 import { CalendarEvent, Todo } from '@/types';
 import toast from 'react-hot-toast';
@@ -28,10 +30,10 @@ interface ChatMessage {
 
 const SUGGESTIONS = [
   'Buy milk. Email John. Meeting Friday at 3pm.',
+  'Break down: write the quarterly report',
   'What do I have this week?',
   'What\'s on my schedule today?',
   'Remind me to review the report by Thursday',
-  'Delete duplicate events',
 ];
 
 // ─── Created item card ────────────────────────────────────────────────────────
@@ -108,6 +110,89 @@ const CreatedItemCard = ({ response }: { response: AIResponse }) => {
           </span>
         </div>
       )}
+    </motion.div>
+  );
+};
+
+// ─── Breakdown card (AI-split subtasks) ──────────────────────────────────────
+
+const BreakdownCard: React.FC<{
+  steps: { title: string; estimatedMinutes?: number }[];
+  parentTask: string;
+  userId: string;
+}> = ({ steps, parentTask, userId }) => {
+  const { theme } = useTheme();
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const saveAll = async () => {
+    if (!userId || saved || saving) return;
+    setSaving(true);
+    try {
+      for (const s of steps) {
+        await createTodo({
+          userId,
+          title: s.title,
+          description: `From breakdown: ${parentTask}`,
+          status: 'todo',
+          priority: 'medium',
+          labels: [],
+          dueDate: null,
+          reminderAt: null,
+          subtasks: [],
+          attachments: [],
+          recurring: null,
+          order: Date.now(),
+          completedAt: null,
+        });
+      }
+      setSaved(true);
+      toast.success(`Saved ${steps.length} subtasks`);
+    } catch {
+      toast.error('Could not save subtasks');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mt-2 p-3 rounded-xl border"
+      style={{
+        background: `linear-gradient(135deg, ${theme.accentColor}14, ${theme.accentColor}07)`,
+        borderColor: `${theme.accentColor}30`,
+      }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: theme.accentColor }} />
+        <span className="text-xs font-semibold" style={{ color: theme.accentColor }}>Breakdown</span>
+        <span className="ml-auto text-[10px] text-white/30">{steps.length} steps</span>
+      </div>
+      <ul className="space-y-1.5 mb-3">
+        {steps.map((s, i) => (
+          <li key={i} className="flex items-start gap-2 text-sm text-white/85">
+            <span className="text-white/30 font-mono text-xs mt-0.5">{i + 1}.</span>
+            <span className="flex-1">{s.title}</span>
+            {s.estimatedMinutes != null && (
+              <span className="text-[10px] text-white/35 font-mono">{s.estimatedMinutes}m</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button
+        onClick={saveAll}
+        disabled={saved || saving}
+        className={cn(
+          'w-full py-1.5 rounded-lg text-xs font-semibold transition-colors',
+          saved
+            ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+            : 'bg-white text-black hover:bg-[#e0e0e0] disabled:opacity-40',
+        )}
+      >
+        {saved ? '✓ Saved as tasks' : saving ? 'Saving…' : 'Save all as tasks'}
+      </button>
     </motion.div>
   );
 };
@@ -243,6 +328,18 @@ export const NexusAIChat: React.FC = () => {
     const loadId = addMsg({ role: 'assistant', text: '', loading: true });
 
     try {
+      // Detect breakdown intent FIRST — it's async (calls Gemini) and shouldn't go through regex parser
+      const breakdownTaskName = detectBreakdownIntent(text);
+      if (breakdownTaskName) {
+        const r = await processBreakdown(breakdownTaskName);
+        patchMsg(loadId, {
+          text: r.message,
+          loading: false,
+          aiResponse: r,
+        });
+        return;
+      }
+
       // Small artificial delay so it feels "smart" rather than instant
       await new Promise((r) => setTimeout(r, 420));
 
@@ -428,8 +525,15 @@ export const NexusAIChat: React.FC = () => {
                           : msg.text}
                       </div>
 
-                      {msg.aiResponse && msg.aiResponse.action !== 'reply' && !msg.loading && (
+                      {msg.aiResponse && msg.aiResponse.action !== 'reply' && msg.aiResponse.action !== 'breakdown' && !msg.loading && (
                         <CreatedItemCard response={msg.aiResponse} />
+                      )}
+                      {msg.aiResponse && msg.aiResponse.action === 'breakdown' && msg.aiResponse.breakdownSteps && !msg.loading && (
+                        <BreakdownCard
+                          steps={msg.aiResponse.breakdownSteps}
+                          parentTask={msg.aiResponse.breakdownSourceTask ?? 'Task'}
+                          userId={user?.uid ?? ''}
+                        />
                       )}
                       {msg.aiBatch && !msg.loading && (
                         <div className="space-y-2 mt-2">
