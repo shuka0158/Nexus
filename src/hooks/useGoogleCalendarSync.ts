@@ -255,12 +255,60 @@ export function useGoogleCalendarSync(userId: string) {
     return results;
   }, [syncAccount]);
 
+  // ── Realtime auto-sync ──────────────────────────────────────────────────────
+  // Sync on mount (when accounts exist), on tab focus, and every 10 min while
+  // the tab is visible. Silently swallows errors — UI shows lastSync timestamps.
+  useEffect(() => {
+    if (!userId) return;
+
+    const SYNC_INTERVAL_MS = 10 * 60_000;
+    const SYNC_WEEKS = 4;
+    let lastRun = 0;
+
+    const runIfDue = async (force = false) => {
+      const list = getStoredAccounts();
+      if (list.length === 0) return;
+      if (!force && Date.now() - lastRun < 60_000) return; // rate-limit
+      lastRun = Date.now();
+      try { await syncAll(SYNC_WEEKS); } catch { /* ignore */ }
+    };
+
+    // Initial sync on mount (small delay so we don't slow first paint)
+    const bootId = setTimeout(() => runIfDue(true), 1500);
+
+    // Periodic — only ticks when tab is visible (browsers throttle anyway)
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') runIfDue();
+    }, SYNC_INTERVAL_MS);
+
+    // On tab focus, sync if 1+ minute since last run
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') runIfDue();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearTimeout(bootId);
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [userId, syncAll]);
+
   const pushEvent = useCallback(async (event: Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, email?: string) => {
     const list = getStoredAccounts();
     const acc = email ? list.find((a) => a.email === email) : list[0];
     if (!acc) throw new Error('No Google account connected.');
     if (Date.now() > acc.expiry) throw new Error(`Session expired for ${acc.email}. Reconnect to push events.`);
     return pushEventToGoogle(acc.token, event);
+  }, []);
+
+  // Push a locally-created event to every connected Google account.
+  // Failures are swallowed individually so one bad account doesn't block the rest.
+  const pushToAll = useCallback(async (event: Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
+    const list = getStoredAccounts();
+    const valid = list.filter((a) => Date.now() < a.expiry);
+    if (valid.length === 0) return;
+    await Promise.allSettled(valid.map((a) => pushEventToGoogle(a.token, event)));
   }, []);
 
   return {
@@ -272,5 +320,6 @@ export function useGoogleCalendarSync(userId: string) {
     syncAccount,
     syncAll,
     pushEvent,
+    pushToAll,
   };
 }

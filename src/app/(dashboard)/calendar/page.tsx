@@ -21,6 +21,8 @@ import { Modal } from '@/components/ui/Modal';
 import { NeonInput } from '@/components/ui/NeonInput';
 import { MapPicker } from '@/components/ui/MapPicker';
 import { useCalendar } from '@/hooks/useCalendar';
+import { useGoogleCalendarSync } from '@/hooks/useGoogleCalendarSync';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CalendarEvent, CalendarView, RecurringConfig } from '@/types';
 import { cn, hexToRgba } from '@/lib/utils';
@@ -843,7 +845,32 @@ function exportICS(events: CalendarEvent[]) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
-  const { events, currentDate, view, navigate, setView, setCurrentDate, addEvent, editEvent, removeEvent } = useCalendar();
+  const { events, currentDate, view, navigate, setView, setCurrentDate, addEvent: addEventLocal, editEvent, removeEvent } = useCalendar();
+  const { user } = useAuth();
+  const { pushToAll, accounts: gcalAccounts } = useGoogleCalendarSync(user?.uid ?? '');
+
+  // Wrap addEvent so that creating a local event also pushes it to every connected Google account
+  const addEvent = async (data: Parameters<typeof addEventLocal>[0]) => {
+    const id = await addEventLocal(data);
+    if (gcalAccounts.length > 0) {
+      try {
+        await pushToAll({
+          title: data.title,
+          description: data.description ?? '',
+          startDate: Timestamp.fromDate(data.startDate),
+          endDate:   Timestamp.fromDate(data.endDate),
+          allDay: data.allDay ?? false,
+          color: data.color ?? '#00d4ff',
+          category: data.category ?? 'personal',
+          location: data.location ?? '',
+          recurring: data.recurring ?? null,
+          reminderMinutes: data.reminderMinutes ?? [],
+          attendees: [],
+        });
+      } catch { /* push errors are non-fatal */ }
+    }
+    return id;
+  };
   const { theme } = useTheme();
 
   const [sidebarOpen,    setSidebarOpen]    = useState(() =>

@@ -140,6 +140,30 @@ export const subscribeToEvents = (
   );
 };
 
+export const getTodos = async (uid: string): Promise<Todo[]> => {
+  const q = query(collection(db, 'todos'), where('userId', '==', uid), orderBy('order', 'asc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Todo);
+};
+
+export const getNotes = async (uid: string): Promise<Note[]> => {
+  const q = query(collection(db, 'notes'), where('userId', '==', uid), orderBy('updatedAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Note);
+};
+
+export const getHabits = async (uid: string): Promise<Habit[]> => {
+  const q = query(collection(db, 'habits'), where('userId', '==', uid), orderBy('createdAt', 'asc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Habit);
+};
+
+export const getGoals = async (uid: string): Promise<Goal[]> => {
+  const q = query(collection(db, 'goals'), where('userId', '==', uid), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Goal);
+};
+
 export const getEvents = async (uid: string): Promise<CalendarEvent[]> => {
   const q = query(
     collection(db, 'events'),

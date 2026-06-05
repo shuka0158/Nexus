@@ -681,8 +681,10 @@ const SecurityTab = () => {
 // ─── Data Tab ─────────────────────────────────────────────────────────────────
 
 const DataTab = () => {
-  const { settings, exportSettings, importSettings } = useSettings();
+  const { user } = useAuth();
+  const { exportSettings, importSettings } = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [exporting, setExporting] = useState<'all' | 'ics' | null>(null);
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -693,34 +695,114 @@ const DataTab = () => {
     else toast.error('Invalid settings file');
   };
 
+  const handleExportAll = async () => {
+    if (!user) return;
+    setExporting('all');
+    try {
+      const { exportAllData, downloadFile } = await import('@/lib/dataExport');
+      const bundle = await exportAllData(user.uid);
+      const date = new Date().toISOString().slice(0, 10);
+      downloadFile(JSON.stringify(bundle, null, 2), `nexus-export-${date}.json`, 'application/json');
+      toast.success(`Exported ${Object.values(bundle.counts).reduce((a, b) => a + b, 0)} items`);
+    } catch (err) {
+      toast.error('Export failed: ' + (err instanceof Error ? err.message : 'unknown'));
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const handleExportICS = async () => {
+    if (!user) return;
+    setExporting('ics');
+    try {
+      const { eventsToICS, downloadFile } = await import('@/lib/dataExport');
+      const { getEvents } = await import('@/lib/firestore');
+      const events = await getEvents(user.uid);
+      const date = new Date().toISOString().slice(0, 10);
+      downloadFile(eventsToICS(events), `nexus-calendar-${date}.ics`, 'text/calendar');
+      toast.success(`Exported ${events.length} events as ICS`);
+    } catch (err) {
+      toast.error('ICS export failed: ' + (err instanceof Error ? err.message : 'unknown'));
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="p-4 rounded-xl bg-[#111111] border border-[#333333] space-y-1">
-        <p className="text-sm font-medium text-white">Export Settings</p>
-        <p className="text-xs text-white/40">Download your theme and preferences as JSON</p>
+      {/* Full data export */}
+      <div className="p-4 rounded-xl bg-[#111111] border border-[#333333] space-y-2">
+        <div>
+          <p className="text-sm font-medium text-white">Export all your data</p>
+          <p className="text-xs text-white/40">
+            Single JSON file with every event, task, note, habit, goal, profile and setting. Take it anywhere.
+          </p>
+        </div>
+        <NeonButton
+          variant="secondary"
+          size="sm"
+          icon={<Download className="w-4 h-4" />}
+          onClick={handleExportAll}
+          loading={exporting === 'all'}
+          disabled={exporting !== null}
+          className="mt-1"
+        >
+          {exporting === 'all' ? 'Exporting…' : 'Export all (JSON)'}
+        </NeonButton>
+      </div>
+
+      {/* ICS calendar export */}
+      <div className="p-4 rounded-xl bg-[#111111] border border-[#333333] space-y-2">
+        <div>
+          <p className="text-sm font-medium text-white">Calendar (.ics)</p>
+          <p className="text-xs text-white/40">
+            Standard iCalendar file — import into Google Calendar, Apple Calendar, Outlook, anything.
+          </p>
+        </div>
+        <NeonButton
+          variant="secondary"
+          size="sm"
+          icon={<Calendar className="w-4 h-4" />}
+          onClick={handleExportICS}
+          loading={exporting === 'ics'}
+          disabled={exporting !== null}
+          className="mt-1"
+        >
+          {exporting === 'ics' ? 'Exporting…' : 'Export calendar (ICS)'}
+        </NeonButton>
+      </div>
+
+      {/* Settings export */}
+      <div className="p-4 rounded-xl bg-[#111111] border border-[#333333] space-y-2">
+        <div>
+          <p className="text-sm font-medium text-white">Export settings only</p>
+          <p className="text-xs text-white/40">Just theme and preferences. Smaller, no personal data.</p>
+        </div>
         <NeonButton
           variant="secondary"
           size="sm"
           icon={<Download className="w-4 h-4" />}
           onClick={exportSettings}
-          className="mt-2"
+          className="mt-1"
         >
-          Export JSON
+          Export settings (JSON)
         </NeonButton>
       </div>
 
-      <div className="p-4 rounded-xl bg-[#111111] border border-[#333333] space-y-1">
-        <p className="text-sm font-medium text-white">Import Settings</p>
-        <p className="text-xs text-white/40">Restore settings from a backup file</p>
+      <div className="p-4 rounded-xl bg-[#111111] border border-[#333333] space-y-2">
+        <div>
+          <p className="text-sm font-medium text-white">Import Settings</p>
+          <p className="text-xs text-white/40">Restore settings from a backup file</p>
+        </div>
         <input ref={fileRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
         <NeonButton
           variant="secondary"
           size="sm"
           icon={<Upload className="w-4 h-4" />}
           onClick={() => fileRef.current?.click()}
-          className="mt-2"
+          className="mt-1"
         >
-          Import JSON
+          Import settings (JSON)
         </NeonButton>
       </div>
 
