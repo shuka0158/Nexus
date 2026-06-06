@@ -12,7 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   Plus, Search, Filter, Grid3X3, List, ChevronDown,
   MoreHorizontal, Trash2, Edit3, CheckCircle2, Circle,
-  GripVertical, X, Tag, CheckCheck, ListTodo,
+  GripVertical, X, Tag, CheckCheck, ListTodo, Repeat,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -23,7 +23,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PriorityBadge, StatusBadge, Badge } from '@/components/ui/Badge';
 import { useTodos } from '@/hooks/useTodos';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Todo, TodoStatus, TodoPriority, SubTask } from '@/types';
+import { Todo, TodoStatus, TodoPriority, SubTask, RecurringConfig } from '@/types';
 import { cn, capitalize, hexToRgba, priorityColor, statusColor, generateId } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -103,6 +103,11 @@ const TodoCard: React.FC<{
               {todo.dueDate && (
                 <span className="text-[10px] text-white/30">
                   📅 {format(todo.dueDate.toDate(), 'MMM d')}
+                </span>
+              )}
+              {todo.recurring && (
+                <span className="text-[10px] text-white/40 inline-flex items-center gap-0.5" title={`Repeats ${todo.recurring.interval > 1 ? `every ${todo.recurring.interval} ` : ''}${todo.recurring.frequency}`}>
+                  <Repeat className="w-2.5 h-2.5" /> {todo.recurring.frequency}
                 </span>
               )}
               {todo.labels.slice(0, 2).map((l) => (
@@ -236,7 +241,7 @@ const TodoModal: React.FC<{
   onSave: (data: {
     title: string; description: string; priority: TodoPriority;
     status: TodoStatus; labels: string[]; dueDate: Date | null;
-    subtasks: SubTask[];
+    subtasks: SubTask[]; recurring: RecurringConfig | null;
   }) => Promise<void>;
 }> = ({ isOpen, onClose, todo, onSave }) => {
   const [title, setTitle] = useState(todo?.title ?? '');
@@ -251,6 +256,10 @@ const TodoModal: React.FC<{
   const [subtasks, setSubtasks] = useState<SubTask[]>(todo?.subtasks ?? []);
   const [subtaskInput, setSubtaskInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [recurEnabled, setRecurEnabled] = useState<boolean>(!!todo?.recurring);
+  const [recurFreq, setRecurFreq] = useState<RecurringConfig['frequency']>(todo?.recurring?.frequency ?? 'weekly');
+  const [recurInterval, setRecurInterval] = useState<number>(todo?.recurring?.interval ?? 1);
+  const [recurEnd, setRecurEnd] = useState<string>(todo?.recurring?.endDate ? format(todo.recurring.endDate.toDate(), 'yyyy-MM-dd') : '');
 
   const addLabel = () => {
     if (labelInput.trim() && !labels.includes(labelInput.trim())) {
@@ -275,9 +284,21 @@ const TodoModal: React.FC<{
 
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Title required'); return; }
+    if (recurEnabled && !dueDate) { toast.error('Recurring tasks need a due date'); return; }
     setLoading(true);
     try {
-      await onSave({ title, description, priority, status, labels, dueDate: dueDate ? new Date(dueDate) : null, subtasks });
+      const recurring: RecurringConfig | null = recurEnabled
+        ? {
+            frequency: recurFreq,
+            interval: Math.max(1, recurInterval),
+            ...(recurEnd ? { endDate: Timestamp.fromDate(new Date(recurEnd)) } : {}),
+          }
+        : null;
+      await onSave({
+        title, description, priority, status, labels,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        subtasks, recurring,
+      });
       onClose();
     } catch {
       toast.error('Failed to save task');
@@ -336,6 +357,48 @@ const TodoModal: React.FC<{
         </div>
 
         <NeonInput label="Due Date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+
+        {/* Recurring */}
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <input type="checkbox" id="todo-recurring" checked={recurEnabled}
+              onChange={(e) => setRecurEnabled(e.target.checked)}
+              className="accent-[var(--accent)]" />
+            <label htmlFor="todo-recurring" className="text-sm text-white/60 select-none cursor-pointer flex items-center gap-1.5">
+              <Repeat className="w-3.5 h-3.5" /> Repeat task
+            </label>
+          </div>
+          {recurEnabled && (
+            <div className="ml-6 space-y-2 p-3 rounded-xl bg-[#111111] border border-[#333333]">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] text-white/40 mb-1 uppercase tracking-wider">Frequency</p>
+                  <select value={recurFreq}
+                    onChange={(e) => setRecurFreq(e.target.value as RecurringConfig['frequency'])}
+                    className="w-full bg-black border border-[#444444] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-white">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/40 mb-1 uppercase tracking-wider">Every</p>
+                  <input type="number" min={1} max={99} value={recurInterval}
+                    onChange={(e) => setRecurInterval(Math.max(1, Number(e.target.value)))}
+                    className="w-full bg-black border border-[#444444] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-white" />
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] text-white/40 mb-1 uppercase tracking-wider">End date (optional)</p>
+                <input type="date" value={recurEnd}
+                  onChange={(e) => setRecurEnd(e.target.value)}
+                  className="w-full bg-black border border-[#444444] rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-white" />
+              </div>
+              <p className="text-[10px] text-white/30">A new task is created automatically each time you mark this one done.</p>
+            </div>
+          )}
+        </div>
 
         {/* Subtasks */}
         <div>

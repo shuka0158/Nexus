@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { Todo, TodoStatus, TodoPriority, SubTask } from '@/types';
+import { Todo, TodoStatus, TodoPriority, SubTask, RecurringConfig } from '@/types';
 import {
   subscribeToTodos,
   createTodo,
@@ -36,6 +36,7 @@ export const useTodos = () => {
     labels?: string[];
     dueDate?: Date | null;
     subtasks?: SubTask[];
+    recurring?: RecurringConfig | null;
   }) => {
     if (!user) return;
     await createTodo({
@@ -49,7 +50,7 @@ export const useTodos = () => {
       reminderAt: null,
       subtasks: data.subtasks ?? [],
       attachments: [],
-      recurring: null,
+      recurring: data.recurring ?? null,
       order: todos.length,
       completedAt: null,
     });
@@ -59,12 +60,51 @@ export const useTodos = () => {
     await updateTodo(id, data);
   }, []);
 
+  // Advance a Date by N daily/weekly/monthly/yearly intervals
+  const advanceDate = (from: Date, recurring: RecurringConfig): Date => {
+    const d = new Date(from);
+    const n = Math.max(1, recurring.interval);
+    switch (recurring.frequency) {
+      case 'daily':   d.setDate(d.getDate() + n); break;
+      case 'weekly':  d.setDate(d.getDate() + n * 7); break;
+      case 'monthly': d.setMonth(d.getMonth() + n); break;
+      case 'yearly':  d.setFullYear(d.getFullYear() + n); break;
+    }
+    return d;
+  };
+
   const completeTodo = useCallback(async (id: string) => {
+    const current = todos.find((t) => t.id === id);
     await updateTodo(id, {
       status: 'done',
       completedAt: Timestamp.now(),
     });
-  }, []);
+
+    // If the completed task was recurring, spawn the next instance with a shifted due date
+    if (current && current.recurring && user) {
+      const base = current.dueDate ? current.dueDate.toDate() : new Date();
+      const nextDue = advanceDate(base, current.recurring);
+      const endDate = current.recurring.endDate?.toDate();
+      if (!endDate || nextDue <= endDate) {
+        await createTodo({
+          userId: user.uid,
+          title: current.title,
+          description: current.description,
+          status: 'todo',
+          priority: current.priority,
+          labels: current.labels,
+          dueDate: Timestamp.fromDate(nextDue),
+          reminderAt: null,
+          // Carry forward subtasks as uncompleted templates
+          subtasks: current.subtasks.map((s) => ({ ...s, completed: false, createdAt: Timestamp.now() })),
+          attachments: [],
+          recurring: current.recurring,
+          order: todos.length,
+          completedAt: null,
+        });
+      }
+    }
+  }, [todos, user]);
 
   const removeTodo = useCallback(async (id: string) => {
     await deleteTodo(id);
