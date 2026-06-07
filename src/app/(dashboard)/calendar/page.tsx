@@ -12,7 +12,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Plus, Grid, List, Calendar as CalIcon,
   Clock, MapPin, AlignLeft, Tag, Pencil, Trash2, X, AlertTriangle, Download,
-  Search, Bell, Repeat, LayoutList, CalendarDays, PanelLeft, Share2,
+  Search, Bell, Repeat, LayoutList, CalendarDays, PanelLeft, Share2, Sparkles,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -20,6 +20,7 @@ import { NeonButton } from '@/components/ui/NeonButton';
 import { Modal } from '@/components/ui/Modal';
 import { NeonInput } from '@/components/ui/NeonInput';
 import { MapPicker } from '@/components/ui/MapPicker';
+import { InviteImportModal } from '@/components/calendar/InviteImportModal';
 import { useCalendar } from '@/hooks/useCalendar';
 import { useGoogleCalendarSync } from '@/hooks/useGoogleCalendarSync';
 import { useAuth } from '@/contexts/AuthContext';
@@ -877,6 +878,7 @@ export default function CalendarPage() {
     typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
   );
   const [addModalOpen,   setAddModalOpen]   = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedDate,   setSelectedDate]   = useState<Date | null>(null);
   const [detailEvent,    setDetailEvent]    = useState<CalendarEvent | null>(null);
   const [editingEvent,   setEditingEvent]   = useState<CalendarEvent | null>(null);
@@ -949,6 +951,11 @@ export default function CalendarPage() {
               <NeonButton glow icon={<Plus className="w-4 h-4" />} className="w-full"
                 onClick={() => { setSelectedDate(currentDate); setAddModalOpen(true); }}>
                 New Event
+              </NeonButton>
+
+              <NeonButton variant="secondary" icon={<Sparkles className="w-3.5 h-3.5" />} className="w-full"
+                onClick={() => setImportModalOpen(true)}>
+                Import invite
               </NeonButton>
 
               <GlassCard padding="none">
@@ -1090,6 +1097,27 @@ export default function CalendarPage() {
       {/* Modals */}
       <AddEventModal isOpen={addModalOpen} onClose={() => setAddModalOpen(false)}
         defaultDate={selectedDate ?? undefined} onAdd={addEvent} />
+
+      <InviteImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImport={async (events) => {
+          for (const ev of events) {
+            await addEvent({
+              title: ev.title,
+              description: ev.description ?? '',
+              location: ev.location ?? '',
+              startDate: new Date(ev.startDate),
+              endDate: new Date(ev.endDate),
+              allDay: ev.allDay,
+              color: '#00d4ff',
+              category: 'imported',
+              recurring: null,
+              reminderMinutes: [15],
+            });
+          }
+        }}
+      />
 
       {detailEvent && (
         <EventDetailModal event={detailEvent}
