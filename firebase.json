@@ -7,12 +7,7 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
+    "cleanUrls": true,
     "headers": [
       {
         "source": "/nexus-app.bin",

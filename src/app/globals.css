@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Press+Start+2P&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -38,6 +38,14 @@ body {
 }
 
 .font-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+/* 8-bit retro look for the 404 page */
+.retro { font-family: 'Press Start 2P', 'Courier New', monospace; line-height: 1.6; }
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
 
 .glass {
   background: #111111;
