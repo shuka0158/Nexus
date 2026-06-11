@@ -20,6 +20,18 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
     }
+    // Public event share links — anyone can read, only owner can create/delete
+    match /publicEvents/{slug} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.ownerId == request.auth.uid;
+      allow update: if false;
+    }
+    // Daily check-ins — private per user
+    match /dailyCheckins/{checkinId} {
+      allow read, write: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }

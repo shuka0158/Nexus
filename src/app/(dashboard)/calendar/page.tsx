@@ -449,9 +449,21 @@ const EventDetailModal: React.FC<{
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const copyShareLink = () => {
-    const url = `${window.location.origin}/event?id=${event.id}`;
-    navigator.clipboard.writeText(url).then(() => toast.success('Share link copied!'));
+  const [sharing, setSharing] = useState(false);
+  const copyShareLink = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const { createPublicEvent } = await import('@/lib/firestore');
+      const slug = await createPublicEvent(event, event.userId);
+      const url = `${window.location.origin}/event/?slug=${slug}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Public link copied to clipboard');
+    } catch {
+      toast.error('Could not create share link.');
+    } finally {
+      setSharing(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -533,9 +545,9 @@ const EventDetailModal: React.FC<{
           <motion.div key="actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="flex flex-wrap gap-2 pt-3 border-t border-white/8">
             <NeonButton variant="ghost" size="sm" icon={<Pencil className="w-3.5 h-3.5" />} onClick={onEdit} className="flex-1">Edit</NeonButton>
-            <button onClick={copyShareLink}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 border border-white/10 hover:border-white/20 hover:text-white/70 transition-all">
-              <Share2 className="w-3.5 h-3.5" /> Share
+            <button onClick={copyShareLink} disabled={sharing}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-white/50 border border-white/10 hover:border-white/20 hover:text-white/70 transition-all disabled:opacity-50">
+              <Share2 className="w-3.5 h-3.5" /> {sharing ? 'Linking…' : 'Share'}
             </button>
             <NeonButton variant="danger" size="sm" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => setConfirming(true)} className="flex-1">Delete</NeonButton>
           </motion.div>

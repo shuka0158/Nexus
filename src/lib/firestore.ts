@@ -19,7 +19,7 @@ import {
   DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { UserProfile, UserSettings, Todo, CalendarEvent, AppNotification, ActivityLog, Note, Habit, Goal, SharedCalendar, PublicEvent } from '@/types';
+import type { UserProfile, UserSettings, Todo, CalendarEvent, AppNotification, ActivityLog, Note, Habit, Goal, SharedCalendar, PublicEvent, DailyCheckin, DailyCheckinAnswers } from '@/types';
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
@@ -347,23 +347,87 @@ export const subscribeToSharedCalendars = (uid: string, email: string, cb: (shar
 
 // ─── Public Events ───────────────────────────────────────────────────────────
 
-export const createPublicEvent = async (data: Omit<PublicEvent, 'id' | 'createdAt'>) => {
-  const ref = await addDoc(collection(db, 'publicEvents'), {
-    ...data, createdAt: serverTimestamp(),
+// Short URL-safe random slug used as both the doc ID and the public path.
+const makeSlug = (len = 10): string => {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789'; // no 0/1/l/o for legibility
+  let s = '';
+  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+};
+
+// Create a public-readable snapshot of an event. Returns the slug.
+export const createPublicEvent = async (event: CalendarEvent, ownerId: string, expiresAt: Timestamp | null = null): Promise<string> => {
+  const slug = makeSlug(10);
+  await setDoc(doc(db, 'publicEvents', slug), {
+    eventId: event.id,
+    ownerId,
+    slug,
+    title: event.title,
+    description: event.description,
+    startDate: event.startDate,
+    endDate: event.endDate,
+    allDay: event.allDay,
+    color: event.color,
+    location: event.location,
+    category: event.category,
+    expiresAt,
+    createdAt: serverTimestamp(),
   });
-  return ref.id;
+  return slug;
 };
 
-export const getPublicEventBySlug = async (slug: string): Promise<(PublicEvent & { event: CalendarEvent }) | null> => {
-  const q = query(collection(db, 'publicEvents'), where('slug', '==', slug), limit(1));
+export const getPublicEventBySlug = async (slug: string): Promise<PublicEvent | null> => {
+  const snap = await getDoc(doc(db, 'publicEvents', slug));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as PublicEvent;
+};
+
+export const deletePublicEvent = async (slug: string) => {
+  await deleteDoc(doc(db, 'publicEvents', slug));
+};
+
+// List all share links for an event so the user can revoke or copy them
+export const getPublicEventsForEvent = async (eventId: string): Promise<PublicEvent[]> => {
+  const q = query(collection(db, 'publicEvents'), where('eventId', '==', eventId));
   const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const pe = { id: snap.docs[0].id, ...snap.docs[0].data() } as PublicEvent;
-  const evSnap = await getDoc(doc(db, 'events', pe.eventId));
-  if (!evSnap.exists()) return null;
-  return { ...pe, event: { id: evSnap.id, ...evSnap.data() } as CalendarEvent };
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PublicEvent);
 };
 
-export const deletePublicEvent = async (id: string) => {
-  await deleteDoc(doc(db, 'publicEvents', id));
+// ─── Daily Check-ins ─────────────────────────────────────────────────────────
+
+const checkinId = (uid: string, date: string) => `${uid}_${date}`;
+
+export const getCheckin = async (uid: string, date: string): Promise<DailyCheckin | null> => {
+  const snap = await getDoc(doc(db, 'dailyCheckins', checkinId(uid, date)));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as DailyCheckin;
 };
+
+export const saveCheckin = async (uid: string, date: string, patch: Partial<Pick<DailyCheckin, 'morning' | 'evening' | 'journalEntry'>>): Promise<void> => {
+  const id = checkinId(uid, date);
+  const ref = doc(db, 'dailyCheckins', id);
+  const existing = await getDoc(ref);
+  if (!existing.exists()) {
+    const empty: Omit<DailyCheckin, 'id'> = {
+      userId: uid,
+      date,
+      morning: { completedAt: null, answers: {} },
+      evening: { completedAt: null, answers: {} },
+      journalEntry: null,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    await setDoc(ref, { ...empty, ...patch, updatedAt: serverTimestamp() });
+  } else {
+    await updateDoc(ref, { ...patch, updatedAt: serverTimestamp() });
+  }
+};
+
+export const subscribeToRecentCheckins = (uid: string, days: number, cb: (entries: DailyCheckin[]) => void) => {
+  // Pull all of the user's check-ins and let the caller slice; volume is tiny (1/day).
+  const q = query(collection(db, 'dailyCheckins'), where('userId', '==', uid), orderBy('date', 'desc'), limit(days));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as DailyCheckin)));
+};
+
+// Avoid unused import lint
+export type _CheckinAnswers = DailyCheckinAnswers;

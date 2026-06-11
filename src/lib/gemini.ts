@@ -102,3 +102,36 @@ export async function suggestFocus(snapshot: {
     temperature: 0.7,
   });
 }
+
+// ─── Daily journal entry from check-in answers ───────────────────────────────
+
+const JOURNAL_SYSTEM = `You write a short, warm, second-person diary entry from someone's morning and evening check-in answers.
+
+Rules:
+- One paragraph, 70-120 words.
+- Address the user as "you". No "the user", no clinical tone.
+- Acknowledge what landed and what didn't, without judgement.
+- End with one sentence noting the mood arc or what tomorrow could carry.
+- No headers, no bullets, no asterisks, no markdown. Plain prose only.`;
+
+export async function generateJournalEntry(answers: {
+  date: string;
+  morning: { oneThing?: string; feeling?: string; blocker?: string };
+  evening: { accomplished?: string; unplanned?: string; closingFeeling?: string };
+}): Promise<string> {
+  const prompt = `Date: ${answers.date}
+
+Morning answers:
+- The one thing I wanted to do: ${answers.morning.oneThing || '(skipped)'}
+- How I was feeling: ${answers.morning.feeling || '(skipped)'}
+- What might trip me up: ${answers.morning.blocker || '(skipped)'}
+
+Evening answers:
+- What I actually did: ${answers.evening.accomplished || '(skipped)'}
+- What didn't go to plan: ${answers.evening.unplanned || '(skipped)'}
+- How I'm feeling now: ${answers.evening.closingFeeling || '(skipped)'}`;
+  return geminiChat(prompt, {
+    systemInstruction: JOURNAL_SYSTEM,
+    temperature: 0.8,
+  });
+}

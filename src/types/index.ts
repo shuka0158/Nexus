@@ -346,10 +346,41 @@ export interface SharedCalendar {
 // ─── Public Event Link ───────────────────────────────────────────────────────
 
 export interface PublicEvent {
-  id: string;
+  id: string;            // doc id (also the slug)
   eventId: string;
   ownerId: string;
   slug: string;
+  // Snapshot fields — copied at creation time so viewers don't need to read events/
+  title: string;
+  description: string;
+  startDate: Timestamp;
+  endDate: Timestamp;
+  allDay: boolean;
+  color: string;
+  location: string;
+  category: string;
   expiresAt: Timestamp | null;
   createdAt: Timestamp;
+}
+
+// ─── Daily Check-in (morning/evening journal) ───────────────────────────────
+
+export interface DailyCheckinAnswers {
+  oneThing?: string;
+  feeling?: string;
+  blocker?: string;       // morning
+  accomplished?: string;
+  unplanned?: string;
+  closingFeeling?: string;  // evening
+}
+
+export interface DailyCheckin {
+  id: string;
+  userId: string;
+  date: string;            // YYYY-MM-DD (local)
+  morning: { completedAt: Timestamp | null; answers: DailyCheckinAnswers };
+  evening: { completedAt: Timestamp | null; answers: DailyCheckinAnswers };
+  journalEntry: string | null;   // AI-written summary, populated after evening
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }

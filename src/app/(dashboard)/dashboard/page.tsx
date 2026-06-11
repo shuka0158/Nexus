@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTodos } from '@/hooks/useTodos';
 import { useCalendar } from '@/hooks/useCalendar';
 import { NextEventCountdown } from '@/components/dashboard/NextEventCountdown';
+import { DailyCheckin } from '@/components/dashboard/DailyCheckin';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const QUOTES = [
@@ -127,6 +128,9 @@ export default function DashboardPage() {
   return (
     <DashboardLayout title="Dashboard" subtitle={format(new Date(), 'EEEE, MMMM d, yyyy')}>
       <div className="space-y-6 max-w-7xl mx-auto">
+        {/* Daily check-in — visible if not done yet, otherwise shows today's journal */}
+        {user && <DailyCheckin userId={user.uid} accentColor={theme.accentColor} />}
+
         {/* First-run onboarding (only when there's no data yet) */}
         {isEmpty && (
           <motion.div
