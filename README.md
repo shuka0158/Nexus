@@ -266,4 +266,4 @@ src/
 
 ## License
 
-MIT
+GNU
