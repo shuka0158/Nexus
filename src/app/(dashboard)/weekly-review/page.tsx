@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart2, CheckSquare, Calendar, Target, Flame, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BarChart2, CheckSquare, Calendar, Target, Flame, TrendingUp, ChevronLeft, ChevronRight, Download, Copy, Share2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -10,6 +10,8 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { subscribeToTodos, subscribeToAllEvents, subscribeToHabits, subscribeToGoals } from '@/lib/firestore';
 import { Todo, CalendarEvent, Habit, Goal } from '@/types';
 import { cn } from '@/lib/utils';
+import { WeeklyRecapCard, RecapData } from '@/components/dashboard/WeeklyRecapCard';
+import toast from 'react-hot-toast';
 
 function weekRange(offset = 0) {
   const now = new Date();
@@ -78,6 +80,74 @@ export default function WeeklyReviewPage() {
     : weekOffset === -1 ? 'Last Week'
     : `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
+  // ── Shareable recap ────────────────────────────────────────────────────────
+  const recapRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState<'download' | 'copy' | 'share' | null>(null);
+
+  const recapData: RecapData = useMemo(() => {
+    // Longest streak among the user's habits using the standard daily-streak definition
+    const computeStreak = (h: Habit): number => {
+      let streak = 0;
+      const cursor = new Date();
+      for (let i = 0; i < 365; i++) {
+        const ds = cursor.toISOString().slice(0, 10);
+        if (h.completedDates.includes(ds)) streak++;
+        else break;
+        cursor.setDate(cursor.getDate() - 1);
+      }
+      return streak;
+    };
+    const longestStreak = habits.reduce((m, h) => Math.max(m, computeStreak(h)), 0);
+    const topTask = completedTodos[0]?.title ?? null;
+    return {
+      start, end,
+      tasksCompleted: completedTodos.length,
+      eventsAttended: weekEvents.length,
+      habitsKept: habitHeatmap.reduce((a, h) => a + h.days.filter(Boolean).length, 0),
+      focusMinutes: 0, // pomodoro session tracking is not yet aggregated; default 0
+      longestStreak,
+      topTaskTitle: topTask,
+    };
+  }, [start, end, completedTodos, weekEvents, habitHeatmap, habits]);
+
+  const exportRecap = async (mode: 'download' | 'copy' | 'share') => {
+    if (!recapRef.current || exporting) return;
+    setExporting(mode);
+    try {
+      const { toPng, toBlob } = await import('html-to-image');
+      const filename = `nexus-week-${start.toISOString().slice(0, 10)}.png`;
+      if (mode === 'download') {
+        const dataUrl = await toPng(recapRef.current, { pixelRatio: 1, cacheBust: true });
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success('Recap downloaded');
+      } else if (mode === 'copy') {
+        const blob = await toBlob(recapRef.current, { pixelRatio: 1, cacheBust: true });
+        if (!blob) throw new Error('Empty blob');
+        if (!navigator.clipboard?.write) throw new Error('Clipboard not supported in this browser');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        toast.success('Image copied — paste anywhere');
+      } else if (mode === 'share') {
+        const blob = await toBlob(recapRef.current, { pixelRatio: 1, cacheBust: true });
+        if (!blob) throw new Error('Empty blob');
+        const file = new File([blob], filename, { type: 'image/png' });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'My week on NEXUS' });
+        } else {
+          throw new Error('Web Share not available — try Download or Copy');
+        }
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <DashboardLayout title="Weekly Review" subtitle="Reflect, learn, improve">
       {/* Week nav */}
@@ -114,6 +184,72 @@ export default function WeeklyReviewPage() {
           </GlassCard>
         ))}
       </div>
+
+      {/* Shareable recap */}
+      <GlassCard padding="md" className="mb-6">
+        <div className="flex items-start sm:items-center gap-3 mb-3 flex-col sm:flex-row">
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-white">Shareable recap</h3>
+            <p className="text-xs text-white/40">Download as PNG, copy to clipboard, or share via your OS share sheet.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => exportRecap('download')}
+              disabled={!!exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-xs font-semibold hover:bg-[#e0e0e0] transition-colors disabled:opacity-50"
+            >
+              {exporting === 'download' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Download
+            </button>
+            <button
+              onClick={() => exportRecap('copy')}
+              disabled={!!exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#444444] text-white text-xs font-semibold hover:border-white transition-colors disabled:opacity-50"
+            >
+              {exporting === 'copy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+              Copy
+            </button>
+            {typeof navigator !== 'undefined' && 'canShare' in navigator && (
+              <button
+                onClick={() => exportRecap('share')}
+                disabled={!!exporting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#444444] text-white text-xs font-semibold hover:border-white transition-colors disabled:opacity-50"
+              >
+                {exporting === 'share' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
+                Share
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Preview — the source renders at 1080x1080 (kept off-screen for export);
+            we show a thumbnail render here for the user. */}
+        <div className="flex justify-center">
+          <div
+            className="rounded-lg overflow-hidden border border-[#333333] relative"
+            style={{ width: 380, height: 380 }}
+          >
+            <div
+              style={{
+                width: 1080,
+                height: 1080,
+                transform: 'scale(0.352)',  // 380 / 1080
+                transformOrigin: 'top left',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+              }}
+            >
+              <WeeklyRecapCard
+                ref={recapRef}
+                data={recapData}
+                accent={theme.accentColor}
+                userName={user?.displayName ?? 'My'}
+              />
+            </div>
+          </div>
+        </div>
+      </GlassCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Daily task bar chart */}
